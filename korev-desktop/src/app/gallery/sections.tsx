@@ -8,6 +8,7 @@ import {
   DiffHunk,
   DiffStat,
   Dialog,
+  EmptyState,
   FileRow,
   Finding,
   IconButton,
@@ -17,11 +18,15 @@ import {
   Radio,
   RiskBadge,
   Select,
+  SidebarNav,
+  SizeBadge,
+  Skeleton,
   Switch,
   Tabs,
   Tag,
   Toast,
   Tooltip,
+  type SidebarNavItem,
 } from '../../design-system';
 import { Row, Section } from './Section';
 import {
@@ -324,6 +329,61 @@ export function ReviewSection() {
             {body}
           </Finding>
         ))}
+      </div>
+    </Section>
+  );
+}
+
+const SAMPLE_NAV_ITEMS: SidebarNavItem<string>[] = [
+  {
+    id: 'review',
+    label: 'Review requests',
+    icon: 'inbox',
+    badge: { count: 5, tone: 'danger', label: '5 waiting' },
+  },
+  {
+    id: 'mine',
+    label: 'My PRs',
+    icon: 'git-pull-request',
+    badge: { count: 0, tone: 'neutral', label: '0 need you' },
+  },
+];
+
+export function InboxSection() {
+  const [view, setView] = useState('review');
+  return (
+    <Section title="Inbox">
+      <Row>
+        <SizeBadge size="S" lines={42} files={3} />
+        <SizeBadge size="M" lines={612} files={23} />
+        <SizeBadge size="L" lines={4810} files={100} filesTruncated />
+      </Row>
+      <div className="grid grid-cols-[248px_56px_1fr] gap-4">
+        <SidebarNav
+          label="Sample navigation"
+          items={SAMPLE_NAV_ITEMS}
+          value={view}
+          onChange={setView}
+        />
+        <SidebarNav
+          label="Sample compact navigation"
+          items={SAMPLE_NAV_ITEMS}
+          value={view}
+          onChange={setView}
+          compact
+        />
+        <div className="flex flex-col gap-2 rounded-md border border-border-1 p-4">
+          <Skeleton className="w-2/3" />
+          <Skeleton className="h-2.5 w-1/3" />
+        </div>
+      </div>
+      <div className="rounded-md border border-border-1">
+        <EmptyState
+          icon="inbox"
+          title="No reviews waiting on you."
+          description="Synced 2m ago"
+          action={<Button size="sm">Refresh</Button>}
+        />
       </div>
     </Section>
   );

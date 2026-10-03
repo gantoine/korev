@@ -27,7 +27,7 @@
     font-family: var(--font-mono);
   }
   ::selection {
-    background: rgba(74, 114, 255, 0.35);
+    background: var(--selection-bg);
   }
   :focus-visible {
     outline: none;

@@ -1,0 +1,100 @@
+# Korev design
+
+How the Korev desktop app looks and behaves. The tokens live in
+`korev-desktop/src/design-system/styles/tokens.css`; this file says how to use them.
+The design-system gallery shows every component in both themes (run the app in dev
+and open `#gallery`).
+
+## Tokens
+
+- **Use semantic tokens only.** Surfaces `bg-app` → `bg-surface` → `bg-raised`, with
+  `bg-hover` and `bg-active` for interaction. Text `fg-1` (primary) → `fg-2` → `fg-3`
+  (secondary, metadata, column headers). Borders `border-1` (hairlines) and `border-2`
+  (controls). Never use a hex value or a raw palette step (`gray-600`, `cobalt-500`) in
+  app code.
+- **One accent.** Cobalt (`accent`, `accent-text`, `accent-subtle`) marks the selected
+  thing, the primary action and the stack label. It never means "good" or "bad".
+- **Status colours carry meaning.** `danger` = needs you now, `warning` = attention
+  soon, `success` = done or ready, neutral (`bg-active` + `fg-2`) = informational.
+- **Layout.** `--sidebar-w` 248px, `--topbar-h` 48px, `--panel-w` 380px. Rows are at
+  least 52px tall.
+- **Motion.** `--dur-fast` for hover and press, `--dur-base` for fades. Rows never
+  animate when the list reorders. Spinners stop under `prefers-reduced-motion`.
+- **Themes.** Dark is the default token set; `[data-theme='light']` overrides it. The
+  app follows the macOS appearance unless Settings → Appearance overrides it.
+
+## Badge roles
+
+| Badge | Use | Tone |
+| --- | --- | --- |
+| Reason chip | Why a PR is in its section ("2 checks failing") | danger / warning / neutral / success, from the reason's severity |
+| P-badge | Suggested priority of a review request (P1–P3) | P1 danger, P2 warning, P3 neutral |
+| `SizeBadge` | Size of a PR (S/M/L), lockfiles excluded | always neutral |
+| Draft | Only mark shown on a review request row | outline |
+| Stack | Header of a stack group | accent |
+| Sidebar count | My PRs = Needs you count; Review requests = requests waiting | danger when something needs you or a P1 exists, otherwise neutral |
+
+`RiskBadge` is reserved for review findings. Do not use it for size or priority.
+
+## Wording
+
+- "Ready to merge" appears only in My PRs. Review requests show only "Draft".
+- Say "Size", never "complexity". The priority column is "Suggested priority".
+- Priority is explained in plain reasons ("Requested from you directly · waiting 3d ·
+  blocks 2 layers · small"), never as a number.
+- When the request time is unknown: "PR opened 3d ago · request time unknown".
+
+## Row anatomy
+
+- **Line 1:** CI icon, then the title in `type-ui` medium. The title takes the remaining
+  width, never less than 240px, and ellipsizes with a tooltip.
+- **Line 2:** `fg-3`, 12px. My PRs: `repo#num · updated 12m`. Review requests:
+  `@author · repo#num · Requested from you · 2d` (or `· via @acme/frontend`).
+- **Right side, fixed columns.** My PRs: the most severe reason chip, plus "+N" when
+  there are more. Review requests: P-badge · file count · Size · Draft badge · CI.
+- On narrow windows, the file count and "updated" drop first.
+
+## Stacks
+
+- Layers render bottom-first (position 1, closest to the base branch, at the top), with
+  "1 of 4" labels and a connector line. The header names the repo and base branch once.
+- A teammate's open layer stays full contrast and reads "Waiting on @alex". Only merged
+  or closed layers use `fg-3` text. Never dim with opacity.
+- My PRs places a stack in the most urgent section among the viewer's own open layers,
+  and the header says why ("Needs you: #304 Lint failing").
+- Review requests group requests from one stack under a compact header ("acme/web ·
+  stack · you're asked on 2 of 4"). Layers not requested from the viewer collapse into
+  one expandable line.
+
+## States and the banner slot
+
+- **Loading:** skeleton rows in the shape of the final list. No spinner in the list.
+- **Empty:** one plain sentence ("No reviews waiting on you."). A section with no PRs
+  hides its header.
+- **Error:** the message and a Retry button replace the list. Never a toast.
+- **Partial or stale:** the list stays, and one banner slot above it explains why
+  (offline, rate limited, a repo Korev can no longer read). More than one problem
+  collapses into "3 problems ▾".
+- Toasts are only for short confirmations ("Repos saved").
+- Sync status lives only in the topbar ("Synced 2m ago", "Offline · data from 14:02",
+  "Reconnect GitHub").
+
+## Keyboard model
+
+- Each list is one `listbox` with roving focus. `j`/`k` or ↓/↑ move between rows,
+  across sections and into stack layers.
+- Enter opens the PR, ⌘Enter opens it on GitHub, Esc closes the side panel and returns
+  focus to the row.
+- ⌘1 / ⌘2 switch views, ⌘, opens Settings, ⌘R refreshes, `?` shows the shortcut sheet.
+- Single-letter shortcuts are ignored while a text field has focus.
+- Tab order: sidebar → list → panel. Every focusable element shows `--focus-ring` on
+  `:focus-visible`.
+
+## Contrast and non-colour signals
+
+- Every text pair meets WCAG AA in both themes: 4.5:1, or 3:1 for text 14px semibold
+  and larger.
+- Colour is never the only signal. CI uses distinct icons (passing `circle-check`,
+  failing `circle-x`, running `loader`, none `circle-dashed`), each with an
+  `aria-label` such as "CI failing". P-badges read "Suggested priority 1", and sidebar
+  counts read "3 need you".
