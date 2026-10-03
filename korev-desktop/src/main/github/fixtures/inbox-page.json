@@ -213,7 +213,48 @@
           "deletions": 45,
           "changedFiles": 12,
           "statusCheckRollup": {
-            "state": "SUCCESS"
+            "state": "SUCCESS",
+            "contexts": {
+              "nodes": [
+                {
+                  "__typename": "CheckRun",
+                  "name": "lint",
+                  "status": "COMPLETED",
+                  "conclusion": "SUCCESS"
+                },
+                {
+                  "__typename": "StatusContext",
+                  "context": "ci/build",
+                  "state": "SUCCESS"
+                }
+              ]
+            }
+          },
+          "latestReviews": {
+            "nodes": [
+              {
+                "author": {
+                  "login": "pedro"
+                },
+                "state": "COMMENTED"
+              },
+              {
+                "author": null,
+                "state": "APPROVED"
+              },
+              {
+                "author": {
+                  "login": "ana"
+                },
+                "state": "CHANGES_REQUESTED"
+              },
+              {
+                "author": {
+                  "login": "pedro"
+                },
+                "state": "APPROVED"
+              }
+            ]
           },
           "stack": null,
           "stackEntry": null,

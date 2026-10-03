@@ -88,7 +88,10 @@ export function rateLimitResetAt(
   return new Date(resetEpochSeconds * MS_PER_SECOND);
 }
 
-function numericHeader(headers: ResponseHeaders, name: string): number | null {
+export function numericHeader(
+  headers: ResponseHeaders,
+  name: string,
+): number | null {
   const value = headers.get(name);
   if (value === null || value.trim() === '') return null;
   const parsed = Number(value);

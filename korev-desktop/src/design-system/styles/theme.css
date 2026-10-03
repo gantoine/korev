@@ -161,6 +161,7 @@
   --animate-fade-fast: kv-fade var(--dur-fast) var(--ease-out);
   --animate-rise: kv-rise var(--dur-slow) var(--ease-out);
   --animate-spin: kv-spin 0.8s linear infinite;
+  --animate-slide-in: kv-slide-in var(--dur-slow) var(--ease-out);
 
   @keyframes kv-spin {
     to {
@@ -169,6 +170,12 @@
   }
   @keyframes kv-fade {
     from {
+      opacity: 0;
+    }
+  }
+  @keyframes kv-slide-in {
+    from {
+      transform: translateX(16px);
       opacity: 0;
     }
   }

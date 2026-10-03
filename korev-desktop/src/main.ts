@@ -2,7 +2,9 @@ import {
   app,
   BrowserWindow,
   ipcMain,
+  Menu,
   nativeTheme,
+  powerMonitor,
   safeStorage,
   screen,
   shell,
@@ -11,7 +13,9 @@ import {
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import started from 'electron-squirrel-startup';
+import { IpcChannel, type AppCommand } from './shared/ipc-contract';
 import type { WindowBounds } from './shared/settings';
+import { appMenuTemplate } from './main/app-menu';
 import { isAppUrl, type AppOrigin } from './main/app-origin';
 import { nodeFileSystem } from './main/file-system';
 import { registerIpcHandlers } from './main/ipc';
@@ -42,6 +46,22 @@ function broadcast(channel: string, payload: unknown) {
   }
 }
 
+function sendToFocusedWindow(command: AppCommand) {
+  BrowserWindow.getFocusedWindow()?.webContents.send(
+    IpcChannel.AppCommand,
+    command,
+  );
+}
+
+function installAppMenu() {
+  const template = appMenuTemplate({
+    appName: app.name,
+    isDevelopment: !app.isPackaged,
+    send: sendToFocusedWindow,
+  });
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 function createKorevApp(): Korev {
   return createKorev({
     userDataPath: app.getPath('userData'),
@@ -63,6 +83,13 @@ function hardenWebContents(contents: WebContents) {
   contents.on('will-navigate', (event, url) => {
     if (!isAppUrl(url, appOrigin)) event.preventDefault();
   });
+}
+
+function keepInboxFresh(korev: Korev) {
+  app.on('browser-window-focus', () => void korev.inbox.trigger('focus'));
+  powerMonitor.on('suspend', () => korev.inbox.suspend());
+  powerMonitor.on('resume', () => void korev.inbox.resume());
+  app.on('before-quit', () => korev.inbox.stop());
 }
 
 function rememberBounds(window: BrowserWindow, korev: Korev) {
@@ -117,11 +144,13 @@ app.on('web-contents-created', (_event, contents) =>
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
+  installAppMenu();
   const korev = createKorevApp();
   registerIpcHandlers(ipcMain, korev.handlers, (url) =>
     isAppUrl(url, appOrigin),
   );
   await korev.start();
+  keepInboxFresh(korev);
   createWindow(korev);
 
   // On OS X it's common to re-create a window in the app when the

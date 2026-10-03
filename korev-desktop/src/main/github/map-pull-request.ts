@@ -9,12 +9,15 @@ import type {
   PullRequest,
   ReviewDecision,
   ReviewRequestEvent,
+  ReviewState,
   Reviewer,
   StackInfo,
   StackLayer,
+  SubmittedReview,
 } from '../../shared/pull-request';
 import {
   type CheckContextNode,
+  type LatestReviewNode,
   type PullRequestNode,
   type ReviewerNode,
   type StackLayerNode,
@@ -42,6 +45,13 @@ const REVIEW_DECISIONS: readonly ReviewDecision[] = [
   'APPROVED',
   'CHANGES_REQUESTED',
   'REVIEW_REQUIRED',
+];
+const REVIEW_STATES: readonly ReviewState[] = [
+  'APPROVED',
+  'CHANGES_REQUESTED',
+  'COMMENTED',
+  'DISMISSED',
+  'PENDING',
 ];
 
 const CI_BY_ROLLUP: Record<string, CiState> = {
@@ -116,6 +126,7 @@ export function toPullRequest(
     files: files.map(toChangedFile),
     filesTruncated: node.files?.pageInfo?.hasNextPage ?? false,
     pendingReviewers: toPendingReviewers(node),
+    reviews: toSubmittedReviews(node),
     reviewRequestEvents: toReviewRequestEvents(node),
     stack: toStack(node, warn),
   };
@@ -177,6 +188,18 @@ function toPendingReviewers(node: PullRequestNode): Reviewer[] {
   return presentNodes(node.reviewRequests)
     .map((request) => toReviewer(request.requestedReviewer))
     .filter((reviewer): reviewer is Reviewer => reviewer !== null);
+}
+
+function toSubmittedReview(node: LatestReviewNode): SubmittedReview[] {
+  const login = node.author?.login;
+  const state = oneOf(node.state, REVIEW_STATES, null);
+  if (!login || !state) return [];
+  return [{ login, state }];
+}
+
+function toSubmittedReviews(node: PullRequestNode): SubmittedReview[] {
+  const reviews = presentNodes(node.latestReviews).flatMap(toSubmittedReview);
+  return [...new Map(reviews.map((review) => [review.login, review])).values()];
 }
 
 function toReviewRequestEvents(node: PullRequestNode): ReviewRequestEvent[] {

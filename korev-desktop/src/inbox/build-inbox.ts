@@ -1,6 +1,7 @@
 import type { MySection, ReviewEntry, ReviewItem } from '../shared/inbox';
 import type { PullRequest } from '../shared/pull-request';
 import { classifyMyPr } from './classify';
+import type { UnknownMergeStreaks } from './merge-streaks';
 import { priority } from './priority';
 import { reviewRequestFor, type Viewer } from './request-age';
 import { prSize } from './size';
@@ -11,6 +12,7 @@ export interface InboxInput {
   reviews: PullRequest[];
   viewer: Viewer;
   now: Date;
+  unknownMergeStreaks: UnknownMergeStreaks;
 }
 
 export interface Inbox {
@@ -35,10 +37,19 @@ function toReviewItem(pr: PullRequest, viewer: Viewer, now: Date): ReviewItem {
   };
 }
 
-export function buildInbox({ mine, reviews, viewer, now }: InboxInput): Inbox {
+export function buildInbox({
+  mine,
+  reviews,
+  viewer,
+  now,
+  unknownMergeStreaks,
+}: InboxInput): Inbox {
   const reviewItems = reviews.map((pr) => toReviewItem(pr, viewer, now));
+  const classified = mine.map((pr) =>
+    classifyMyPr(pr, { unknownMergeStreak: unknownMergeStreaks[pr.id] ?? 0 }),
+  );
   return {
-    mine: groupMyPrs(mine.map(classifyMyPr)),
+    mine: groupMyPrs(classified),
     reviews: groupReviews(reviewItems),
     reviewCount: reviewItems.length,
   };

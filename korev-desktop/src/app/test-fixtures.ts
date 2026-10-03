@@ -42,6 +42,7 @@ export function makePr(
     files: [],
     filesTruncated: false,
     pendingReviewers: [],
+    reviews: [],
     reviewRequestEvents: [],
     stack: null,
     ...overrides,
@@ -273,6 +274,7 @@ export function makeSnapshot(
     stacksUnavailable: false,
     error: null,
     rateLimitResetAt: null,
+    nextRetryAt: null,
     ...overrides,
   };
 }

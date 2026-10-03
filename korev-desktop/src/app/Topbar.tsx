@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Button, Icon, IconButton, cn } from '../design-system';
+import { Button, Icon, IconButton, Kbd, cn } from '../design-system';
 import type { InboxSnapshot } from '../shared/inbox';
 import { formatClock, formatSynced } from './format';
 import { DRAG_REGION, NO_DRAG } from './layout';
@@ -33,8 +33,12 @@ function StatusText({
   );
 }
 
-function withTime(label: string, prefix: string, iso: string | null): string {
-  return iso ? `${label} · ${prefix} ${formatClock(iso)}` : label;
+const HINT_KEYS = ['J', 'K', '↵', '?'];
+
+function withTime(label: string, iso: string | null, prefix?: string): string {
+  if (!iso) return label;
+  const clock = formatClock(iso);
+  return `${label} · ${prefix ? `${prefix} ${clock}` : clock}`;
 }
 
 interface SyncStatusProps {
@@ -73,15 +77,17 @@ function SyncStatus({ snapshot, onReconnect }: SyncStatusProps) {
     case 'rate_limited':
       return (
         <StatusText tone="warning">
-          {withTime('Rate limited', 'resumes', snapshot.rateLimitResetAt)}
+          {withTime('Rate limited', snapshot.rateLimitResetAt, 'resumes')}
         </StatusText>
       );
     case 'offline':
       return (
         <StatusText tone="warning">
-          {withTime('Offline', 'data from', snapshot.syncedAt)}
+          {withTime('Offline', snapshot.syncedAt)}
         </StatusText>
       );
+    case 'paused':
+      return <StatusText>Paused</StatusText>;
     case 'auth_lost':
       return (
         <Button
@@ -99,11 +105,31 @@ function SyncStatus({ snapshot, onReconnect }: SyncStatusProps) {
   }
 }
 
+function KeyHints({ onShowShortcuts }: { onShowShortcuts: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label="Keyboard shortcuts"
+      title="Keyboard shortcuts"
+      onClick={onShowShortcuts}
+      className={cn(
+        'hidden cursor-pointer items-center gap-1 rounded-sm border-0 bg-transparent p-1 hover:bg-hover focus-visible:shadow-focus min-[900px]:inline-flex',
+        NO_DRAG,
+      )}
+    >
+      {HINT_KEYS.map((key) => (
+        <Kbd key={key}>{key}</Kbd>
+      ))}
+    </button>
+  );
+}
+
 export interface TopbarProps {
   title: string;
   subtitle?: string;
   snapshot: InboxSnapshot | null;
   onReconnect: () => void;
+  onShowShortcuts?: () => void;
 }
 
 export function Topbar({
@@ -111,6 +137,7 @@ export function Topbar({
   subtitle,
   snapshot,
   onReconnect,
+  onShowShortcuts,
 }: TopbarProps) {
   return (
     <header
@@ -124,7 +151,7 @@ export function Topbar({
         <span className="truncate text-xs text-fg-3">{subtitle}</span>
       ) : null}
       <span className="flex-1" />
-      <span role="status" className="inline-flex">
+      <span className="inline-flex">
         {snapshot ? (
           <SyncStatus snapshot={snapshot} onReconnect={onReconnect} />
         ) : null}
@@ -137,6 +164,7 @@ export function Topbar({
         onClick={() => void refreshInbox()}
         className={NO_DRAG}
       />
+      {onShowShortcuts ? <KeyHints onShowShortcuts={onShowShortcuts} /> : null}
     </header>
   );
 }

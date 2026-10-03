@@ -2,6 +2,8 @@ import { useState } from 'react';
 import {
   Avatar,
   Badge,
+  Banner,
+  BannerGroup,
   Button,
   Card,
   Checkbox,
@@ -18,6 +20,7 @@ import {
   Radio,
   RiskBadge,
   Select,
+  SidePanel,
   SidebarNav,
   SizeBadge,
   Skeleton,
@@ -26,6 +29,7 @@ import {
   Tag,
   Toast,
   Tooltip,
+  type BannerItem,
   type SidebarNavItem,
 } from '../../design-system';
 import { Row, Section } from './Section';
@@ -349,6 +353,82 @@ const SAMPLE_NAV_ITEMS: SidebarNavItem<string>[] = [
   },
 ];
 
+const SAMPLE_BANNERS: BannerItem[] = [
+  {
+    id: 'offline',
+    tone: 'warning',
+    message: 'Offline · showing data from 14:02 · retrying at 14:05',
+  },
+  {
+    id: 'auth',
+    tone: 'danger',
+    message: 'GitHub access was revoked',
+    action: { label: 'Reconnect', onClick: () => undefined },
+  },
+  { id: 'stacks', tone: 'neutral', message: 'Stack relationships unavailable' },
+];
+
+function BannerSamples() {
+  return (
+    <div className="flex flex-col gap-2">
+      <Banner tone="warning">Rate limited · resumes 14:20 · in 3:12</Banner>
+      <Banner
+        tone="danger"
+        action={{ label: 'Reconnect', onClick: () => undefined }}
+      >
+        GitHub access was revoked
+      </Banner>
+      <Banner
+        tone="neutral"
+        action={{ label: 'Narrow repos', onClick: () => undefined }}
+      >
+        Showing 300 PRs — more aren't loaded
+      </Banner>
+      <BannerGroup items={SAMPLE_BANNERS} />
+    </div>
+  );
+}
+
+function SidePanelSample() {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="flex h-72 overflow-hidden rounded-md border border-border-1">
+      <div className="flex flex-1 items-center justify-center text-fg-3">
+        {open ? null : (
+          <Button size="sm" onClick={() => setOpen(true)}>
+            Open panel
+          </Button>
+        )}
+      </div>
+      {open ? (
+        <SidePanel
+          label="Sample panel"
+          onClose={() => setOpen(false)}
+          header={
+            <div className="text-xs text-fg-3">
+              <span className="font-mono">acme/api#491</span> · @octocat
+            </div>
+          }
+          footer={
+            <Button variant="primary" kbd="⌘↵" className="w-full">
+              Open on GitHub
+            </Button>
+          }
+        >
+          <h2 className="m-0 mt-1 type-h3 text-fg-1">
+            Rate-limit per tenant on ingestion endpoints
+          </h2>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <Badge tone="danger">2 checks failing</Badge>
+            <Badge tone="warning">3 unresolved threads</Badge>
+            <Badge>Mergeability unknown</Badge>
+          </div>
+        </SidePanel>
+      ) : null}
+    </div>
+  );
+}
+
 export function InboxSection() {
   const [view, setView] = useState('review');
   return (
@@ -385,6 +465,8 @@ export function InboxSection() {
           action={<Button size="sm">Refresh</Button>}
         />
       </div>
+      <BannerSamples />
+      <SidePanelSample />
     </Section>
   );
 }

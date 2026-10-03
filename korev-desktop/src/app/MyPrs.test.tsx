@@ -1,9 +1,35 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { InboxSnapshot } from '../shared/inbox';
+import { installFakeBridge, installMatchMedia } from './fake-bridge';
 import { MyPrs } from './MyPrs';
 import { makeSnapshot } from './test-fixtures';
 
+beforeEach(() => {
+  installMatchMedia();
+  installFakeBridge();
+});
 afterEach(cleanup);
+
+function renderMyPrs(snapshot: InboxSnapshot = makeSnapshot()) {
+  return render(<MyPrs snapshot={snapshot} onOpenSettings={vi.fn()} />);
+}
+
+function rowTitled(title: string): HTMLElement {
+  return screen.getByRole('option', { name: new RegExp(title) });
+}
+
+function pressFrom(row: HTMLElement, key: string): Element | null {
+  row.focus();
+  fireEvent.keyDown(row, { key });
+  return document.activeElement;
+}
 
 function sectionHeading(name: string): HTMLElement {
   return screen.getByRole('heading', { name: new RegExp(`^${name}`) });
@@ -11,7 +37,7 @@ function sectionHeading(name: string): HTMLElement {
 
 describe('MyPrs', () => {
   it('renders the three sections with their counts', () => {
-    render(<MyPrs snapshot={makeSnapshot()} />);
+    renderMyPrs();
     expect(within(sectionHeading('Needs you')).getByText('2')).toBeTruthy();
     expect(within(sectionHeading('In progress')).getByText('1')).toBeTruthy();
     expect(
@@ -26,7 +52,7 @@ describe('MyPrs', () => {
         ? { ...section, count: 0, entries: [] }
         : section,
     );
-    render(<MyPrs snapshot={{ ...snapshot, mine }} />);
+    renderMyPrs({ ...snapshot, mine });
     expect(
       screen.queryByRole('heading', { name: /^Ready to merge/ }),
     ).toBeNull();
@@ -34,7 +60,7 @@ describe('MyPrs', () => {
   });
 
   it('renders stack layers bottom-first and labels the teammate layer', () => {
-    render(<MyPrs snapshot={makeSnapshot()} />);
+    renderMyPrs();
     const layerTitles = [
       'App shell',
       'IPC bridge and token store',
@@ -53,5 +79,24 @@ describe('MyPrs', () => {
     expect(screen.getByText('1 of 4')).toBeTruthy();
     expect(screen.getByText('Waiting on @alex')).toBeTruthy();
     expect(screen.getByText('Merged')).toBeTruthy();
+  });
+
+  it('moves with j/k into stack layers and across section boundaries', () => {
+    renderMyPrs();
+    expect(
+      pressFrom(rowTitled('Rate-limit per tenant'), 'j')?.textContent,
+    ).toContain('App shell');
+    expect(
+      pressFrom(rowTitled('Settings: repo picker UI'), 'j')?.textContent,
+    ).toContain('Retry flaky exporter');
+    expect(
+      pressFrom(rowTitled('Retry flaky exporter'), 'ArrowUp')?.textContent,
+    ).toContain('Settings: repo picker UI');
+  });
+
+  it('keeps the list under an offline banner', () => {
+    renderMyPrs(makeSnapshot({ status: 'offline' }));
+    expect(screen.getByText(/^Offline · showing data from/)).toBeTruthy();
+    expect(rowTitled('Bump OpenTelemetry')).toBeTruthy();
   });
 });

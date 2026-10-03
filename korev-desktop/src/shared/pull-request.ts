@@ -31,6 +31,18 @@ export interface ChangedFile {
   deletions: number;
 }
 
+export type ReviewState =
+  | 'APPROVED'
+  | 'CHANGES_REQUESTED'
+  | 'COMMENTED'
+  | 'DISMISSED'
+  | 'PENDING';
+
+export interface SubmittedReview {
+  login: string;
+  state: ReviewState;
+}
+
 export type Reviewer =
   | { kind: 'user'; login: string }
   | { kind: 'team'; org: string; slug: string };
@@ -82,6 +94,7 @@ export interface PullRequest {
   files: ChangedFile[];
   filesTruncated: boolean;
   pendingReviewers: Reviewer[];
+  reviews: SubmittedReview[];
   reviewRequestEvents: ReviewRequestEvent[];
   stack: StackInfo | null;
 }

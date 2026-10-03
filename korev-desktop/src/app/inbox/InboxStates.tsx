@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { Button, EmptyState, Skeleton } from '../../design-system';
 import { refreshInbox } from '../useInboxSnapshot';
 
-const SEARCH_CAP = 300;
 const FALLBACK_ERROR = 'Korev could not reach GitHub.';
 
 export interface LoadErrorProps {
@@ -22,14 +21,6 @@ export function LoadError({ title, message }: LoadErrorProps) {
         </Button>
       }
     />
-  );
-}
-
-export function TruncatedNotice() {
-  return (
-    <p className="mx-5 mt-3 mb-0 text-xs text-fg-3">
-      Showing first {SEARCH_CAP} PRs
-    </p>
   );
 }
 

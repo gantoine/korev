@@ -5,6 +5,11 @@ import { StackFieldRejectedError, redactToken } from './errors';
 import { type GraphqlError, type GraphqlPathSegment, graphql } from './graphql';
 import { toPullRequest } from './map-pull-request';
 import {
+  type NotificationsRequest,
+  type NotificationsResult,
+  fetchNotifications,
+} from './notifications';
+import {
   type Connection,
   type PullRequestNode,
   type ReviewThreadNode,
@@ -56,6 +61,10 @@ export interface GithubClient {
     signal?: AbortSignal,
   ): Promise<InboxResult>;
   fetchSuggestedRepos(token: string, signal?: AbortSignal): Promise<string[]>;
+  checkNotifications(
+    token: string,
+    request: NotificationsRequest,
+  ): Promise<NotificationsResult>;
   clearSessionCache(): void;
 }
 
@@ -182,6 +191,18 @@ class GithubApiClient implements GithubClient {
       ),
     );
     return byMentionCount(repos);
+  }
+
+  checkNotifications(
+    token: string,
+    request: NotificationsRequest,
+  ): Promise<NotificationsResult> {
+    return fetchNotifications(
+      this.deps.fetch,
+      this.deps.apiUrl,
+      token,
+      request,
+    );
   }
 
   #emptyInbox(): InboxResult {

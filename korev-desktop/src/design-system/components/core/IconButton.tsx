@@ -17,7 +17,7 @@ export interface IconButtonProps extends Omit<
 }
 
 const BASE =
-  'inline-flex size-control-md cursor-pointer items-center justify-center rounded-sm border border-transparent bg-transparent text-fg-3 transition-colors duration-(--dur-fast) ease-out enabled:hover:bg-hover enabled:hover:text-fg-1 disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:bg-accent-subtle aria-pressed:text-accent-text';
+  'inline-flex size-control-md cursor-pointer items-center justify-center rounded-sm border border-transparent bg-transparent text-fg-3 transition-colors duration-(--dur-fast) ease-out focus-visible:shadow-focus enabled:hover:bg-hover enabled:hover:text-fg-1 disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:bg-accent-subtle aria-pressed:text-accent-text';
 
 const VARIANTS: Record<IconButtonVariant, string> = {
   ghost: '',

@@ -1,25 +1,23 @@
 import type { ReactNode } from 'react';
 import { cn } from '../../design-system';
-import { korev } from '../bridge';
+import { useListOption } from './listbox';
 
 const ROW =
-  'grid min-h-13 w-full cursor-pointer items-center gap-3 border-0 bg-transparent px-5 py-2 text-left font-sans text-fg-1 transition-colors duration-(--dur-fast) ease-out hover:bg-hover focus-visible:relative focus-visible:shadow-focus';
+  'grid min-h-13 w-full cursor-pointer items-center gap-3 px-5 py-2 text-left font-sans text-fg-1 transition-colors duration-(--dur-fast) ease-out hover:bg-hover aria-selected:bg-raised aria-selected:shadow-[inset_2px_0_0_var(--accent)] focus-visible:relative focus-visible:shadow-focus';
 
 export interface PrRowProps {
+  optionKey: string;
   url: string;
   className?: string;
   children: ReactNode;
 }
 
-export function PrRow({ url, className, children }: PrRowProps) {
+export function PrRow({ optionKey, url, className, children }: PrRowProps) {
+  const option = useListOption(optionKey, { url });
   return (
-    <button
-      type="button"
-      onClick={() => korev().shell.openGithub(url)}
-      className={cn(ROW, className)}
-    >
+    <div {...option} className={cn(ROW, className)}>
       {children}
-    </button>
+    </div>
   );
 }
 
@@ -59,9 +57,7 @@ export function LayerLabel({ position, size }: StackPlace) {
   );
 }
 
-export function prRef(pr: { repo: string; number: number }): string {
-  return `${pr.repo}#${pr.number}`;
-}
+export { prRef } from './pr-ref';
 
 export function authorHandle(login: string | null): string | null {
   return login ? `@${login}` : null;

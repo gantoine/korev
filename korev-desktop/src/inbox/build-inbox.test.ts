@@ -35,6 +35,7 @@ describe('buildInbox', () => {
       reviews: [requested(301, 1), requested(303, 3)],
       viewer,
       now: NOW,
+      unknownMergeStreaks: {},
     });
 
     expect(inbox.mine.map((section) => section.count)).toEqual([1, 0, 1]);

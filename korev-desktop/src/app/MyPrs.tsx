@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { EmptyState, Skeleton } from '../design-system';
 import type {
   Bucket,
@@ -6,12 +7,9 @@ import type {
   MySection,
   MyStack,
 } from '../shared/inbox';
-import {
-  LoadError,
-  LoadingList,
-  SkeletonRows,
-  TruncatedNotice,
-} from './inbox/InboxStates';
+import { InboxList } from './inbox/InboxList';
+import { LoadError, LoadingList, SkeletonRows } from './inbox/InboxStates';
+import { MINE_MODEL } from './inbox/list-model';
 import { MyPrRow } from './inbox/MyPrRow';
 import { OtherLayerRow } from './inbox/OtherLayerRow';
 import { inboxPhase } from './inbox/phase';
@@ -25,6 +23,7 @@ const BUCKET_LABELS: Record<Bucket, string> = {
   ready: 'Ready to merge',
 };
 
+const LIST_LABEL = 'My pull requests';
 const SKELETON_ROWS_PER_SECTION = 3;
 
 function MyStackGroup({ stack }: { stack: MyStack }) {
@@ -43,7 +42,11 @@ function MyStackGroup({ stack }: { stack: MyStack }) {
               stackPlace={{ position: layer.position, size: stack.size }}
             />
           ) : (
-            <OtherLayerRow layer={layer.layer} stackSize={stack.size} />
+            <OtherLayerRow
+              repo={stack.repo}
+              layer={layer.layer}
+              stackSize={stack.size}
+            />
           )}
         </StackLayerItem>
       ))}
@@ -60,9 +63,18 @@ function MyEntryView({ entry }: { entry: MyEntry }) {
   return <MyPrRow item={entry.item} />;
 }
 
-function SectionHeading({ label, count }: { label: string; count: number }) {
+interface SectionHeadingProps {
+  id: string;
+  label: string;
+  count: number;
+}
+
+function SectionHeading({ id, label, count }: SectionHeadingProps) {
   return (
-    <h2 className="m-0 flex items-center gap-2 px-5 pt-4 pb-1.5 type-overline text-fg-3">
+    <h2
+      id={id}
+      className="m-0 flex items-center gap-2 px-5 pt-4 pb-1.5 type-overline text-fg-3"
+    >
       {label}
       <span className="font-mono text-fg-2">{count}</span>
     </h2>
@@ -70,20 +82,18 @@ function SectionHeading({ label, count }: { label: string; count: number }) {
 }
 
 function SectionBlock({ section }: { section: MySection }) {
+  const headingId = useId();
   return (
-    <section>
+    <div role="group" aria-labelledby={headingId}>
       <SectionHeading
+        id={headingId}
         label={BUCKET_LABELS[section.bucket]}
         count={section.count}
       />
-      <ul className="m-0 list-none p-0">
-        {section.entries.map((entry) => (
-          <li key={entryKey(entry)}>
-            <MyEntryView entry={entry} />
-          </li>
-        ))}
-      </ul>
-    </section>
+      {section.entries.map((entry) => (
+        <MyEntryView key={entryKey(entry)} entry={entry} />
+      ))}
+    </div>
   );
 }
 
@@ -110,28 +120,39 @@ function MyPrsSkeleton() {
   );
 }
 
-export function MyPrs({ snapshot }: { snapshot: InboxSnapshot | null }) {
+const NOTHING_NEEDS_YOU = (
+  <EmptyState
+    icon="check-check"
+    title="Nothing needs you."
+    description="You have no open PRs in the repos Korev watches."
+  />
+);
+
+export interface MyPrsProps {
+  snapshot: InboxSnapshot | null;
+  onOpenSettings: () => void;
+}
+
+export function MyPrs({ snapshot, onOpenSettings }: MyPrsProps) {
   const phase = inboxPhase(snapshot);
   if (phase.kind === 'loading') return <MyPrsSkeleton />;
   if (phase.kind === 'failed') {
     return <LoadError title="Couldn't load your PRs" message={phase.message} />;
   }
-  const sections = orderedSections(phase.snapshot);
-  if (sections.length === 0) {
-    return (
-      <EmptyState
-        icon="check-check"
-        title="Nothing needs you."
-        description="You have no open PRs in the repos Korev watches."
-      />
-    );
-  }
   return (
-    <div className="pb-6">
-      {phase.snapshot.truncated.mine ? <TruncatedNotice /> : null}
-      {sections.map((section) => (
-        <SectionBlock key={section.bucket} section={section} />
-      ))}
-    </div>
+    <InboxList
+      snapshot={phase.snapshot}
+      model={MINE_MODEL}
+      view="mine"
+      label={LIST_LABEL}
+      onOpenSettings={onOpenSettings}
+      empty={NOTHING_NEEDS_YOU}
+    >
+      {(displayed) =>
+        orderedSections(displayed).map((section) => (
+          <SectionBlock key={section.bucket} section={section} />
+        ))
+      }
+    </InboxList>
   );
 }

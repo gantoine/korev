@@ -35,6 +35,7 @@ export function makePr(overrides: Partial<PullRequest> = {}): PullRequest {
     files: [],
     filesTruncated: false,
     pendingReviewers: [],
+    reviews: [],
     reviewRequestEvents: [],
     stack: null,
     ...overrides,

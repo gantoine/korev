@@ -72,6 +72,19 @@ describe('toPullRequest', () => {
     expect(pr.filesTruncated).toBe(false);
   });
 
+  it('maps checks and the latest review per reviewer on a review request', () => {
+    const pr = toPullRequest(teamRequestNode);
+
+    expect(pr.checks).toEqual([
+      { name: 'lint', outcome: 'passing' },
+      { name: 'ci/build', outcome: 'passing' },
+    ]);
+    expect(pr.reviews).toEqual([
+      { login: 'pedro', state: 'APPROVED' },
+      { login: 'ana', state: 'CHANGES_REQUESTED' },
+    ]);
+  });
+
   it('maps a node without the stack field to a single PR and warns only once', async () => {
     vi.resetModules();
     const { toPullRequest: freshMapper } = await import('./map-pull-request');

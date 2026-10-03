@@ -9,13 +9,13 @@ import { createAuthService } from './auth-service';
 import type { FileSystem } from './file-system';
 import { DeviceFlowLogin } from './github/auth';
 import { createGithubClient } from './github/client';
+import { createInboxPoller, type InboxPoller } from './github/inbox-poller';
 import {
   GITHUB_API_URL,
   GITHUB_OAUTH_CLIENT_ID,
   GITHUB_OAUTH_SCOPES,
   GITHUB_WEB_URL,
 } from './github/config';
-import { createInboxService } from './inbox-service';
 import type { IpcHandlers } from './ipc';
 import { createSettingsStore, type SettingsStore } from './settings-store';
 import { createTokenStore, type SecretCipher } from './token-store';
@@ -38,6 +38,7 @@ export interface KorevDeps {
 export interface Korev {
   handlers: IpcHandlers;
   settings: SettingsStore;
+  inbox: Pick<InboxPoller, 'trigger' | 'suspend' | 'resume' | 'stop'>;
   start(): Promise<void>;
 }
 
@@ -56,13 +57,17 @@ export function createKorev(deps: KorevDeps): Korev {
     apiUrl: GITHUB_API_URL,
   });
 
-  const inbox = createInboxService({
-    fetchInbox: (token, repos, signal) =>
-      github.fetchInbox(token, repos, signal),
+  const inbox = createInboxPoller({
+    client: github,
     buildInbox,
     token: () => auth.token(),
     repos: () => settings.current().repos,
     now: () => new Date(),
+    scheduler: {
+      setTimeout: (callback, milliseconds) =>
+        setTimeout(callback, milliseconds),
+      clearTimeout: (handle) => clearTimeout(handle),
+    },
     publish: (snapshot) => deps.broadcast(IpcChannel.InboxUpdated, snapshot),
   });
 
@@ -117,7 +122,7 @@ export function createKorev(deps: KorevDeps): Korev {
 
   const handlers: IpcHandlers = {
     [IpcChannel.InboxLoad]: () => inbox.snapshot(),
-    [IpcChannel.InboxRefresh]: () => inbox.refresh(),
+    [IpcChannel.InboxRefresh]: () => inbox.trigger('manual'),
     [IpcChannel.AuthGetState]: () => auth.state(),
     [IpcChannel.AuthStartDeviceFlow]: () => auth.startDeviceFlow(),
     [IpcChannel.AuthCancelDeviceFlow]: () => auth.cancelDeviceFlow(),
@@ -137,8 +142,8 @@ export function createKorev(deps: KorevDeps): Korev {
     if (problem) deps.warn(problem);
     deps.applyTheme(loaded.theme);
     await auth.init();
-    void inbox.refresh();
+    void inbox.start();
   }
 
-  return { handlers, settings, start };
+  return { handlers, settings, inbox, start };
 }

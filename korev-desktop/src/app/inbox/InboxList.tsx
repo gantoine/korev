@@ -1,0 +1,202 @@
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react';
+import type { InboxSnapshot } from '../../shared/inbox';
+import type { InboxView } from '../../shared/settings';
+import { korev } from '../bridge';
+import { useKeyShortcuts } from '../keyboard';
+import { WIDE_QUERY } from '../layout';
+import { useMediaQuery } from '../useMediaQuery';
+import { BannerSlot } from './BannerSlot';
+import { GoneRow } from './GoneRow';
+import type { ListModel } from './list-model';
+import {
+  ListboxProvider,
+  findOption,
+  focusOption,
+  focusRovingStop,
+  handleListboxKey,
+  updateRovingStop,
+  type ListboxApi,
+} from './listbox';
+import { PrPanel } from './PrPanel';
+import { APPLY_UPDATES_KEY, UpdatesPill } from './UpdatesPill';
+import { useHeldSnapshot, useIdleApply } from './useHeldSnapshot';
+import { useSelection } from './useSelection';
+
+type ElementRef = RefObject<HTMLDivElement | null>;
+
+function optionTop(listbox: ElementRef, key: string | null): number | null {
+  const option = findOption(listbox.current, key);
+  return option ? option.getBoundingClientRect().top : null;
+}
+
+function useScrollAnchor(
+  scroller: ElementRef,
+  listbox: ElementRef,
+  key: string | null,
+): () => void {
+  const capturedTop = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const before = capturedTop.current;
+    capturedTop.current = null;
+    const after = optionTop(listbox, key);
+    if (before === null || after === null || !scroller.current) return;
+    scroller.current.scrollTop += after - before;
+  });
+  return useCallback(() => {
+    capturedTop.current = optionTop(listbox, key);
+  }, [listbox, key]);
+}
+
+function useFocusWithin() {
+  const [focused, setFocused] = useState(false);
+  const onFocus = () => setFocused(true);
+  const onBlur = (event: FocusEvent<HTMLElement>) => {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      return;
+    }
+    setFocused(false);
+  };
+  return { focused, onFocus, onBlur };
+}
+
+function openExternal(url: string) {
+  void korev().shell.openGithub(url);
+}
+
+export interface InboxListProps {
+  snapshot: InboxSnapshot;
+  model: ListModel;
+  view: InboxView;
+  label: string;
+  onOpenSettings: () => void;
+  header?: ReactNode;
+  empty: ReactNode;
+  children: (displayed: InboxSnapshot) => ReactNode;
+}
+
+export function InboxList({
+  snapshot,
+  model,
+  view,
+  label,
+  onOpenSettings,
+  header,
+  empty,
+  children,
+}: InboxListProps) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const listbox = useRef<HTMLDivElement>(null);
+  const [pointerInside, setPointerInside] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const focusWithin = useFocusWithin();
+  const holding = pointerInside || focusWithin.focused || panelOpen;
+  const held = useHeldSnapshot(snapshot, model, holding);
+  const subjects = useMemo(
+    () => model.subjects(held.displayed),
+    [model, held.displayed],
+  );
+  const selection = useSelection(subjects);
+  if (panelOpen && !selection.subject) setPanelOpen(false);
+  const captureAnchor = useScrollAnchor(
+    scroller,
+    listbox,
+    selection.selectedKey,
+  );
+  const docked = useMediaQuery(WIDE_QUERY);
+
+  function applyHeld() {
+    captureAnchor();
+    held.apply();
+  }
+
+  const noteInteraction = useIdleApply(held.pendingCount > 0, applyHeld);
+  const { selectedKey } = selection;
+
+  const closePanel = useCallback(() => {
+    setPanelOpen(false);
+    focusOption(listbox.current, selectedKey);
+  }, [selectedKey]);
+
+  useLayoutEffect(() => updateRovingStop(listbox.current, selectedKey));
+
+  useKeyShortcuts({
+    [APPLY_UPDATES_KEY]: applyHeld,
+    j: () => focusRovingStop(listbox.current),
+    k: () => focusRovingStop(listbox.current),
+  });
+
+  const api: ListboxApi = {
+    selectedKey,
+    select: selection.select,
+    activate: (key) => {
+      selection.select(key);
+      setPanelOpen(true);
+    },
+    openExternal,
+  };
+
+  const showList = !model.isEmpty(held.displayed) || selection.goneRow;
+
+  return (
+    <ListboxProvider value={api}>
+      <div className="relative flex h-full min-h-0">
+        <div
+          ref={scroller}
+          className="min-w-0 flex-1 overflow-auto pb-6"
+          onMouseEnter={() => setPointerInside(true)}
+          onMouseLeave={() => setPointerInside(false)}
+          onMouseMove={noteInteraction}
+          onWheel={noteInteraction}
+          onKeyDown={noteInteraction}
+        >
+          {held.pendingCount > 0 ? (
+            <UpdatesPill count={held.pendingCount} onShow={applyHeld} />
+          ) : null}
+          <BannerSlot
+            snapshot={held.displayed}
+            view={view}
+            onOpenSettings={onOpenSettings}
+          />
+          {showList ? (
+            <>
+              {header}
+              <div
+                ref={listbox}
+                role="listbox"
+                aria-label={label}
+                onKeyDown={(event) => handleListboxKey(event, api)}
+                onFocus={focusWithin.onFocus}
+                onBlur={focusWithin.onBlur}
+              >
+                {selection.goneRow ? (
+                  <GoneRow subject={selection.goneRow} />
+                ) : null}
+                {children(held.displayed)}
+              </div>
+            </>
+          ) : (
+            empty
+          )}
+        </div>
+        {panelOpen && selection.subject ? (
+          <PrPanel
+            subject={selection.subject}
+            gone={selection.subjectGone}
+            mode={docked ? 'docked' : 'overlay'}
+            onClose={closePanel}
+            onOpenGithub={openExternal}
+          />
+        ) : null}
+      </div>
+    </ListboxProvider>
+  );
+}

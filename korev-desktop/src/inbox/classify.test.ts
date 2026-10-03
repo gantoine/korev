@@ -55,6 +55,21 @@ describe('classifyMyPr merge states', () => {
     expect(result.reasons[0].label).toContain('e2e');
   });
 
+  it.each([
+    [2, 'checking-mergeability'],
+    [3, 'mergeability-unknown'],
+  ] as const)(
+    'reads UNKNOWN seen for %i syncs in a row as %s',
+    (unknownMergeStreak, code) => {
+      const result = classifyMyPr(makePr({ mergeStateStatus: 'UNKNOWN' }), {
+        unknownMergeStreak,
+      });
+
+      expect(result.bucket).toBe('in-progress');
+      expect(codesOf(result)).toEqual([code]);
+    },
+  );
+
   it('never marks an approved green PR ready unless the merge state allows it', () => {
     const result = classifyMyPr(
       makePr({

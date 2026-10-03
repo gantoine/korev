@@ -1,4 +1,4 @@
-import { useEffect, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useId, type MouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { IconButton } from '../core/IconButton';
 
@@ -21,6 +21,7 @@ export function Dialog({
   footer,
   width,
 }: DialogProps) {
+  const titleId = useId();
   useEffect(() => {
     if (!open || !onClose) return;
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -44,12 +45,16 @@ export function Dialog({
       <div
         role="dialog"
         aria-modal="true"
+        aria-labelledby={titleId}
         className="w-[min(480px,calc(100vw-32px))] animate-rise rounded-lg bg-raised shadow-overlay"
         style={width ? { width } : undefined}
       >
         <div className="flex items-start gap-3 px-5 pt-[18px]">
           <div className="flex-1">
-            <h2 className="m-0 font-sans text-lg leading-[1.3] font-semibold tracking-tight text-fg-1">
+            <h2
+              id={titleId}
+              className="m-0 font-sans text-lg leading-[1.3] font-semibold tracking-tight text-fg-1"
+            >
               {title}
             </h2>
             {description ? (

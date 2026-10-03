@@ -43,6 +43,11 @@ export interface StackNode {
   entries?: Connection<StackLayerNode> | null;
 }
 
+export interface LatestReviewNode {
+  author?: { login?: string } | null;
+  state?: string;
+}
+
 export interface ReviewThreadNode {
   isResolved: boolean;
 }
@@ -68,6 +73,7 @@ export interface PullRequestNode {
     state?: string;
     contexts?: Connection<CheckContextNode>;
   } | null;
+  latestReviews?: Connection<LatestReviewNode>;
   stack?: StackNode | null;
   stackEntry?: { position?: number } | null;
   reviewThreads?: Connection<ReviewThreadNode>;

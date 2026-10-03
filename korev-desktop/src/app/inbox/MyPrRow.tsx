@@ -17,7 +17,11 @@ export function MyPrRow({ item, stackPlace }: MyPrRowProps) {
   const { pr, reasons } = item;
   const reference = stackPlace ? `#${pr.number}` : prRef(pr);
   return (
-    <PrRow url={pr.url} className={stackPlace ? LAYER_GRID : MINE_GRID}>
+    <PrRow
+      optionKey={prRef(pr)}
+      url={pr.url}
+      className={stackPlace ? LAYER_GRID : MINE_GRID}
+    >
       {stackPlace ? <LayerLabel {...stackPlace} /> : null}
       <CiIcon state={pr.ci} checks={pr.checks} />
       <PrSummary

@@ -56,6 +56,7 @@ export function ReviewRow({ item, stackPlace }: ReviewRowProps) {
   const { pr, size, priority } = item;
   return (
     <PrRow
+      optionKey={prRef(pr)}
       url={pr.url}
       className={stackPlace ? REVIEW_LAYER_GRID : REVIEW_GRID}
     >

@@ -1,4 +1,5 @@
 export const NARROW_QUERY = '(max-width: 899px)';
+export const WIDE_QUERY = '(min-width: 1100px)';
 export const NARROW_HIDDEN = 'max-[899px]:hidden';
 export const DRAG_REGION = '[-webkit-app-region:drag]';
 export const NO_DRAG = '[-webkit-app-region:no-drag]';

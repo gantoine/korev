@@ -26,3 +26,5 @@ export * from './components/display/EmptyState';
 export * from './components/display/Skeleton';
 export * from './components/layout/SidebarNav';
 export * from './components/review/SizeBadge';
+export * from './components/display/Banner';
+export * from './components/layout/SidePanel';

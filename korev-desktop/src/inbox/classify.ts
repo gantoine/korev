@@ -3,7 +3,14 @@ import type { MergeStateStatus, PullRequest } from '../shared/pull-request';
 import { countOf } from './format';
 import { severityRank } from './severity';
 
-type ReasonRule = (pr: PullRequest) => Reason | null;
+export interface ClassifyContext {
+  unknownMergeStreak: number;
+}
+
+type ReasonRule = (pr: PullRequest, context: ClassifyContext) => Reason | null;
+
+const MAX_SYNCS_CHECKING_MERGEABILITY = 2;
+const FIRST_SIGHTING: ClassifyContext = { unknownMergeStreak: 1 };
 
 const READY_MERGE_STATES: ReadonlySet<MergeStateStatus> = new Set([
   'CLEAN',
@@ -22,6 +29,7 @@ const REASON_SEVERITY: Record<ReasonCode, ReasonSeverity> = {
   draft: 'neutral',
   'waiting-on-review': 'neutral',
   'checking-mergeability': 'neutral',
+  'mergeability-unknown': 'neutral',
   'no-checks': 'neutral',
   'ready-to-merge': 'success',
 };
@@ -123,8 +131,14 @@ function blockedReason(pr: PullRequest): Reason | null {
   return reason('blocked-by-rules', 'Blocked by branch rules');
 }
 
-function mergeabilityReason(pr: PullRequest): Reason | null {
+function mergeabilityReason(
+  pr: PullRequest,
+  { unknownMergeStreak }: ClassifyContext,
+): Reason | null {
   if (pr.mergeStateStatus !== 'UNKNOWN') return null;
+  if (unknownMergeStreak > MAX_SYNCS_CHECKING_MERGEABILITY) {
+    return reason('mergeability-unknown', 'Mergeability unknown');
+  }
   return reason('checking-mergeability', 'Checking mergeability…');
 }
 
@@ -150,10 +164,11 @@ function isReason(candidate: Reason | null): candidate is Reason {
 
 function collectReasons(
   pr: PullRequest,
+  context: ClassifyContext,
   rules: readonly ReasonRule[],
 ): Reason[] {
   return rules
-    .map((rule) => rule(pr))
+    .map((rule) => rule(pr, context))
     .filter(isReason)
     .sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
 }
@@ -166,12 +181,15 @@ function isReadyToMerge(pr: PullRequest): boolean {
   );
 }
 
-export function classifyMyPr(pr: PullRequest): MyPr {
-  const needsYou = collectReasons(pr, NEEDS_YOU_RULES);
+export function classifyMyPr(
+  pr: PullRequest,
+  context: ClassifyContext = FIRST_SIGHTING,
+): MyPr {
+  const needsYou = collectReasons(pr, context, NEEDS_YOU_RULES);
   if (needsYou.length > 0) {
     return { pr, bucket: 'needs-you', reasons: needsYou };
   }
-  const inProgress = collectReasons(pr, IN_PROGRESS_RULES);
+  const inProgress = collectReasons(pr, context, IN_PROGRESS_RULES);
   if (inProgress.length === 0 && isReadyToMerge(pr)) {
     return {
       pr,

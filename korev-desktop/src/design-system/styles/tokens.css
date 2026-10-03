@@ -178,7 +178,7 @@
   --accent-border: rgba(47, 91, 234, 0.4);
   --success-text: var(--green-700);
   --danger-text: var(--red-700);
-  --warning-text: var(--amber-700);
+  --warning-text: #8e6b12;
   --diff-add-bg: #ebf8f0;
   --diff-add-gutter: #d3f0df;
   --diff-add-word: #b5e6c9;

@@ -30,21 +30,28 @@ const CI_DISPLAY: Record<CiState, CiDisplay> = {
   },
 };
 
+const COUNTED_CHECKS: Partial<Record<CiState, (check: Check) => boolean>> = {
+  failing: (check) => check.outcome === 'failing',
+  running: (check) => check.outcome !== 'pending',
+};
+
 function ciLabel(state: CiState, checks: Check[]): string {
   const { label } = CI_DISPLAY[state];
-  if (state !== 'failing' || checks.length === 0) return label;
-  const failing = checks.filter((check) => check.outcome === 'failing');
-  return `${label}, ${failing.length} of ${checks.length} checks`;
+  const counted = COUNTED_CHECKS[state];
+  if (!counted || checks.length === 0) return label;
+  const count = checks.filter(counted).length;
+  return `${label}, ${count} of ${checks.length} checks`;
 }
 
 export interface CiIconProps {
   state: CiState;
   checks?: Check[];
+  label?: string;
 }
 
-export function CiIcon({ state, checks = [] }: CiIconProps) {
+export function CiIcon({ state, checks = [], label: givenLabel }: CiIconProps) {
   const { icon, className } = CI_DISPLAY[state];
-  const label = ciLabel(state, checks);
+  const label = givenLabel ?? ciLabel(state, checks);
   return (
     <span role="img" aria-label={label} title={label} className="inline-flex">
       <Icon name={icon} size={14} className={className} />

@@ -28,8 +28,8 @@ describe('Topbar', () => {
         onReconnect={vi.fn()}
       />,
     );
-    expect(screen.getByRole('status').textContent).toContain(
-      formatClock(SYNCED_AT),
-    );
+    expect(
+      screen.getByText(`Offline · ${formatClock(SYNCED_AT)}`),
+    ).toBeTruthy();
   });
 });

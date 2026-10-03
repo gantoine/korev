@@ -1,6 +1,7 @@
 import {
   CHECK_CONTEXTS_LIMIT,
   FILES_LIMIT,
+  LATEST_REVIEWS_LIMIT,
   ORGANIZATIONS_LIMIT,
   REVIEW_REQUESTS_LIMIT,
   REVIEW_THREADS_LIMIT,
@@ -83,16 +84,8 @@ fragment PrCore on PullRequest {
   additions
   deletions
   changedFiles
-  statusCheckRollup { state }
-  ${includeStacks ? STACK_FIELDS : ''}
-}`;
-}
-
-const MY_PR_FRAGMENT = `
-fragment MyPrFields on PullRequest {
-  ...PrCore
-  reviewThreads(first: ${REVIEW_THREADS_LIMIT}) { ${REVIEW_THREAD_CONNECTION} }
   statusCheckRollup {
+    state
     contexts(first: ${CHECK_CONTEXTS_LIMIT}) {
       nodes {
         __typename
@@ -101,6 +94,17 @@ fragment MyPrFields on PullRequest {
       }
     }
   }
+  latestReviews(first: ${LATEST_REVIEWS_LIMIT}) {
+    nodes { author { login } state }
+  }
+  ${includeStacks ? STACK_FIELDS : ''}
+}`;
+}
+
+const MY_PR_FRAGMENT = `
+fragment MyPrFields on PullRequest {
+  ...PrCore
+  reviewThreads(first: ${REVIEW_THREADS_LIMIT}) { ${REVIEW_THREAD_CONNECTION} }
 }`;
 
 const REVIEW_REQUEST_FRAGMENT = `

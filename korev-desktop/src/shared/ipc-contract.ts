@@ -18,7 +18,15 @@ export enum IpcChannel {
   SettingsSetLastView = 'settings:set-last-view',
   SettingsSuggestedRepos = 'settings:suggested-repos',
   ShellOpenGithub = 'shell:open-github',
+  AppCommand = 'app:command',
 }
+
+export type AppCommand =
+  | 'show-review'
+  | 'show-mine'
+  | 'show-settings'
+  | 'refresh'
+  | 'show-shortcuts';
 
 export type Unsubscribe = () => void;
 
@@ -45,5 +53,8 @@ export interface KorevBridge {
   };
   shell: {
     openGithub(url: string): Promise<void>;
+  };
+  app: {
+    onCommand(listener: (command: AppCommand) => void): Unsubscribe;
   };
 }

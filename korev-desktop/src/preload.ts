@@ -40,6 +40,9 @@ const bridge: KorevBridge = {
   shell: {
     openGithub: (url) => invoke(IpcChannel.ShellOpenGithub, url),
   },
+  app: {
+    onCommand: (listener) => subscribe(IpcChannel.AppCommand, listener),
+  },
 };
 
 contextBridge.exposeInMainWorld('korev', bridge);

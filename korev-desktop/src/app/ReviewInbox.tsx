@@ -7,13 +7,12 @@ import type {
   ReviewStackLayer,
 } from '../shared/inbox';
 import { formatSynced, joinMeta, pluralize } from './format';
-import {
-  LoadError,
-  LoadingList,
-  SkeletonRows,
-  TruncatedNotice,
-} from './inbox/InboxStates';
+import { toggleKey } from './inbox/entries';
 import { REVIEW_GRID } from './inbox/grid';
+import { InboxList } from './inbox/InboxList';
+import { LoadError, LoadingList, SkeletonRows } from './inbox/InboxStates';
+import { REVIEW_MODEL } from './inbox/list-model';
+import { useListOption } from './inbox/listbox';
 import { OtherLayerRow } from './inbox/OtherLayerRow';
 import { inboxPhase } from './inbox/phase';
 import { ReviewRow } from './inbox/ReviewRow';
@@ -22,6 +21,7 @@ import { NARROW_HIDDEN } from './layout';
 import { MINUTE_MS, useNow } from './useNow';
 
 const SKELETON_ROWS = 5;
+const LIST_LABEL = 'Review requests';
 
 type OtherLayer = Extract<ReviewStackLayer, { kind: 'other' }>;
 
@@ -38,14 +38,16 @@ function otherLayersSummary(others: OtherLayer[]): string {
 }
 
 function ReviewLayer({
+  repo,
   layer,
   size,
 }: {
+  repo: string;
   layer: ReviewStackLayer;
   size: number;
 }) {
   if (layer.kind === 'other') {
-    return <OtherLayerRow layer={layer.layer} stackSize={size} />;
+    return <OtherLayerRow repo={repo} layer={layer.layer} stackSize={size} />;
   }
   return (
     <ReviewRow
@@ -55,27 +57,29 @@ function ReviewLayer({
   );
 }
 
-function OtherLayersToggle({
-  summary,
-  expanded,
-  onToggle,
-}: {
+interface OtherLayersToggleProps {
+  stackId: string;
   summary: string;
   expanded: boolean;
   onToggle: () => void;
-}) {
+}
+
+function OtherLayersToggle({
+  stackId,
+  summary,
+  expanded,
+  onToggle,
+}: OtherLayersToggleProps) {
+  const option = useListOption(toggleKey(stackId), { onActivate: onToggle });
   return (
-    <li>
-      <button
-        type="button"
-        aria-expanded={expanded}
-        onClick={onToggle}
-        className="flex w-full cursor-pointer items-center gap-1.5 border-0 bg-transparent py-2 pr-5 pl-20 text-left font-sans text-xs text-fg-3 hover:bg-hover hover:text-fg-1 focus-visible:relative focus-visible:shadow-focus"
-      >
-        {summary}
-        <Icon name={expanded ? 'chevron-down' : 'chevron-right'} size={12} />
-      </button>
-    </li>
+    <div
+      {...option}
+      aria-expanded={expanded}
+      className="flex w-full cursor-pointer items-center gap-1.5 py-2 pr-5 pl-20 text-left font-sans text-xs text-fg-3 hover:bg-hover hover:text-fg-1 aria-selected:bg-raised focus-visible:relative focus-visible:shadow-focus"
+    >
+      {summary}
+      <Icon name={expanded ? 'chevron-down' : 'chevron-right'} size={12} />
+    </div>
   );
 }
 
@@ -95,6 +99,7 @@ function ReviewStackGroup({ stack }: { stack: ReviewStack }) {
     >
       {others.length > 0 ? (
         <OtherLayersToggle
+          stackId={stack.id}
           summary={otherLayersSummary(others)}
           expanded={expanded}
           onToggle={() => setExpanded((current) => !current)}
@@ -102,7 +107,7 @@ function ReviewStackGroup({ stack }: { stack: ReviewStack }) {
       ) : null}
       {visible.map((layer) => (
         <StackLayerItem key={layer.position}>
-          <ReviewLayer layer={layer} size={stack.size} />
+          <ReviewLayer repo={stack.repo} layer={layer} size={stack.size} />
         </StackLayerItem>
       ))}
     </StackGroup>
@@ -148,7 +153,12 @@ function NoReviews({ syncedAt }: { syncedAt: string | null }) {
   );
 }
 
-export function ReviewInbox({ snapshot }: { snapshot: InboxSnapshot | null }) {
+export interface ReviewInboxProps {
+  snapshot: InboxSnapshot | null;
+  onOpenSettings: () => void;
+}
+
+export function ReviewInbox({ snapshot, onOpenSettings }: ReviewInboxProps) {
   const phase = inboxPhase(snapshot);
   if (phase.kind === 'loading') {
     return (
@@ -165,19 +175,21 @@ export function ReviewInbox({ snapshot }: { snapshot: InboxSnapshot | null }) {
       />
     );
   }
-  const { reviews, truncated, syncedAt } = phase.snapshot;
-  if (reviews.length === 0) return <NoReviews syncedAt={syncedAt} />;
   return (
-    <div className="pb-6">
-      {truncated.reviews ? <TruncatedNotice /> : null}
-      <ColumnHeader />
-      <ul className="m-0 list-none p-0">
-        {reviews.map((entry) => (
-          <li key={entryKey(entry)}>
-            <ReviewEntryView entry={entry} />
-          </li>
-        ))}
-      </ul>
-    </div>
+    <InboxList
+      snapshot={phase.snapshot}
+      model={REVIEW_MODEL}
+      view="review"
+      label={LIST_LABEL}
+      onOpenSettings={onOpenSettings}
+      header={<ColumnHeader />}
+      empty={<NoReviews syncedAt={phase.snapshot.syncedAt} />}
+    >
+      {(displayed) =>
+        displayed.reviews.map((entry) => (
+          <ReviewEntryView key={entryKey(entry)} entry={entry} />
+        ))
+      }
+    </InboxList>
   );
 }

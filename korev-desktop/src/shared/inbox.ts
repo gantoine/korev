@@ -16,6 +16,7 @@ export type ReasonCode =
   | 'blocked-by-rules'
   | 'waiting-on-review'
   | 'checking-mergeability'
+  | 'mergeability-unknown'
   | 'no-checks'
   | 'ready-to-merge';
 
@@ -111,6 +112,7 @@ export type SyncStatus =
   | 'idle'
   | 'syncing'
   | 'live'
+  | 'paused'
   | 'offline'
   | 'rate_limited'
   | 'auth_lost'
@@ -134,4 +136,5 @@ export interface InboxSnapshot {
   stacksUnavailable: boolean;
   error: string | null;
   rateLimitResetAt: string | null;
+  nextRetryAt: string | null;
 }

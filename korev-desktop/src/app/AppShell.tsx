@@ -11,12 +11,16 @@ import type { InboxSnapshot } from '../shared/inbox';
 import type { InboxView, Settings } from '../shared/settings';
 import { pluralize } from './format';
 import { hasTopPriority, needsYouCount, openCount } from './inbox/selectors';
+import { useKeyShortcuts } from './keyboard';
 import { DRAG_REGION, NARROW_QUERY } from './layout';
+import { LiveAnnouncer } from './LiveAnnouncer';
 import { MyPrs } from './MyPrs';
 import { ReviewInbox } from './ReviewInbox';
 import { SettingsPage } from './Settings';
+import { SHORTCUT_SHEET_KEY, ShortcutSheet } from './ShortcutSheet';
 import { Topbar } from './Topbar';
-import { useInboxSnapshot } from './useInboxSnapshot';
+import { useAppCommands } from './useAppCommands';
+import { refreshInbox, useInboxSnapshot } from './useInboxSnapshot';
 import { useMediaQuery } from './useMediaQuery';
 import { saveLastView } from './useSettings';
 
@@ -127,12 +131,27 @@ function Sidebar({ view, snapshot, onSelect }: SidebarProps) {
 interface ViewContentProps extends AppShellProps {
   view: View;
   snapshot: InboxSnapshot | null;
+  onOpenSettings: () => void;
 }
 
-function ViewContent({ view, auth, settings, snapshot }: ViewContentProps) {
-  if (view === 'mine') return <MyPrs snapshot={snapshot} />;
-  if (view === 'review') return <ReviewInbox snapshot={snapshot} />;
-  return <SettingsPage auth={auth} settings={settings} snapshot={snapshot} />;
+function ViewContent({
+  view,
+  auth,
+  settings,
+  snapshot,
+  onOpenSettings,
+}: ViewContentProps) {
+  if (view === 'mine') {
+    return <MyPrs snapshot={snapshot} onOpenSettings={onOpenSettings} />;
+  }
+  if (view === 'review') {
+    return <ReviewInbox snapshot={snapshot} onOpenSettings={onOpenSettings} />;
+  }
+  return (
+    <div className="h-full overflow-auto">
+      <SettingsPage auth={auth} settings={settings} snapshot={snapshot} />
+    </div>
+  );
 }
 
 export interface AppShellProps {
@@ -142,12 +161,24 @@ export interface AppShellProps {
 
 export function AppShell({ auth, settings }: AppShellProps) {
   const [view, setView] = useState<View>(settings.lastView);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const snapshot = useInboxSnapshot();
+  const openSettings = () => selectView(SETTINGS_VIEW);
+  const showShortcuts = () => setShortcutsOpen(true);
 
   function selectView(next: View) {
     setView(next);
     if (next !== SETTINGS_VIEW) void saveLastView(next);
   }
+
+  useKeyShortcuts({ [SHORTCUT_SHEET_KEY]: showShortcuts });
+  useAppCommands({
+    'show-review': () => selectView('review'),
+    'show-mine': () => selectView('mine'),
+    'show-settings': openSettings,
+    refresh: () => void refreshInbox(),
+    'show-shortcuts': showShortcuts,
+  });
 
   return (
     <div className="flex h-screen bg-app text-fg-1">
@@ -157,17 +188,25 @@ export function AppShell({ auth, settings }: AppShellProps) {
           title={VIEW_TITLES[view]}
           subtitle={viewSubtitle(view, snapshot)}
           snapshot={snapshot}
-          onReconnect={() => selectView(SETTINGS_VIEW)}
+          onReconnect={openSettings}
+          onShowShortcuts={view === SETTINGS_VIEW ? undefined : showShortcuts}
         />
-        <main className="min-h-0 flex-1 overflow-auto">
+        <main className="min-h-0 flex-1 overflow-hidden">
           <ViewContent
+            key={view}
             view={view}
             auth={auth}
             settings={settings}
             snapshot={snapshot}
+            onOpenSettings={openSettings}
           />
         </main>
       </div>
+      <LiveAnnouncer snapshot={snapshot} />
+      <ShortcutSheet
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+      />
     </div>
   );
 }
