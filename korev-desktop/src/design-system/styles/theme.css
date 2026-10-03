@@ -1,0 +1,214 @@
+@custom-variant light (&:where([data-theme=light], [data-theme=light] *));
+
+@theme static {
+  --font-sans:
+    'Onest', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:
+    'Fragment Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --text-*: initial;
+  --text-2xs: 11px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 32px;
+  --text-4xl: 44px;
+  --text-5xl: 60px;
+  --text-code: 12.5px;
+  --text-code--line-height: var(--lh-code);
+
+  --tracking-*: initial;
+  --tracking-display: -0.025em;
+  --tracking-tight: -0.012em;
+  --tracking-normal: 0;
+  --tracking-caps: 0.07em;
+
+  --radius-*: initial;
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-full: 999px;
+
+  --shadow-*: initial;
+  --shadow-none: none;
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.25);
+  --shadow-pop: 0 0 0 1px var(--border-2), 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-overlay: 0 0 0 1px var(--border-2), 0 24px 64px rgba(0, 0, 0, 0.6);
+
+  --ease-*: initial;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.6, 0, 0.3, 1);
+
+  --spacing: 4px;
+}
+
+@theme inline {
+  --color-*: initial;
+  --color-white: var(--white);
+  --color-gray-0: var(--gray-0);
+  --color-gray-50: var(--gray-50);
+  --color-gray-100: var(--gray-100);
+  --color-gray-150: var(--gray-150);
+  --color-gray-200: var(--gray-200);
+  --color-gray-300: var(--gray-300);
+  --color-gray-400: var(--gray-400);
+  --color-gray-500: var(--gray-500);
+  --color-gray-600: var(--gray-600);
+  --color-gray-700: var(--gray-700);
+  --color-gray-800: var(--gray-800);
+  --color-gray-900: var(--gray-900);
+  --color-gray-950: var(--gray-950);
+  --color-cobalt-100: var(--cobalt-100);
+  --color-cobalt-200: var(--cobalt-200);
+  --color-cobalt-300: var(--cobalt-300);
+  --color-cobalt-400: var(--cobalt-400);
+  --color-cobalt-500: var(--cobalt-500);
+  --color-cobalt-600: var(--cobalt-600);
+  --color-cobalt-700: var(--cobalt-700);
+  --color-cobalt-800: var(--cobalt-800);
+  --color-cobalt-900: var(--cobalt-900);
+  --color-cobalt-950: var(--cobalt-950);
+  --color-green-100: var(--green-100);
+  --color-green-400: var(--green-400);
+  --color-green-500: var(--green-500);
+  --color-green-700: var(--green-700);
+  --color-red-100: var(--red-100);
+  --color-red-400: var(--red-400);
+  --color-red-500: var(--red-500);
+  --color-red-700: var(--red-700);
+  --color-orange-400: var(--orange-400);
+  --color-orange-500: var(--orange-500);
+  --color-orange-700: var(--orange-700);
+  --color-amber-400: var(--amber-400);
+  --color-amber-500: var(--amber-500);
+  --color-amber-700: var(--amber-700);
+
+  --color-app: var(--bg-app);
+  --color-surface: var(--bg-surface);
+  --color-raised: var(--bg-raised);
+  --color-hover: var(--bg-hover);
+  --color-active: var(--bg-active);
+  --color-inset: var(--bg-inset);
+  --color-overlay: var(--bg-overlay);
+  --color-border-1: var(--border-1);
+  --color-border-2: var(--border-2);
+  --color-border-strong: var(--border-strong);
+  --color-fg-1: var(--fg-1);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-fg-4: var(--fg-4);
+  --color-fg-on-accent: var(--fg-on-accent);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-press: var(--accent-press);
+  --color-accent-text: var(--accent-text);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-border: var(--accent-border);
+  --color-success: var(--success);
+  --color-success-text: var(--success-text);
+  --color-success-subtle: var(--success-subtle);
+  --color-danger: var(--danger);
+  --color-danger-text: var(--danger-text);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-warning: var(--warning);
+  --color-warning-text: var(--warning-text);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-risk-critical: var(--risk-critical);
+  --color-risk-critical-subtle: var(--risk-critical-subtle);
+  --color-risk-high: var(--risk-high);
+  --color-risk-high-subtle: var(--risk-high-subtle);
+  --color-risk-medium: var(--risk-medium);
+  --color-risk-medium-subtle: var(--risk-medium-subtle);
+  --color-risk-low: var(--risk-low);
+  --color-risk-low-subtle: var(--risk-low-subtle);
+  --color-diff-add-bg: var(--diff-add-bg);
+  --color-diff-add-gutter: var(--diff-add-gutter);
+  --color-diff-add-word: var(--diff-add-word);
+  --color-diff-add-fg: var(--diff-add-fg);
+  --color-diff-del-bg: var(--diff-del-bg);
+  --color-diff-del-gutter: var(--diff-del-gutter);
+  --color-diff-del-word: var(--diff-del-word);
+  --color-diff-del-fg: var(--diff-del-fg);
+  --color-diff-hunk-bg: var(--diff-hunk-bg);
+  --color-diff-hunk-fg: var(--diff-hunk-fg);
+  --color-syn-keyword: var(--syn-keyword);
+  --color-syn-string: var(--syn-string);
+  --color-syn-number: var(--syn-number);
+  --color-syn-comment: var(--syn-comment);
+  --color-syn-fn: var(--syn-fn);
+  --color-syn-type: var(--syn-type);
+  --color-syn-punct: var(--syn-punct);
+  --color-syn-plain: var(--syn-plain);
+
+  --shadow-inset-top: var(--inset-top);
+  --shadow-focus: var(--focus-ring);
+  --shadow-halo: 0 0 0 3px var(--accent-subtle);
+
+  --spacing-control-sm: var(--control-h-sm);
+  --spacing-control-md: var(--control-h-md);
+  --spacing-control-lg: var(--control-h-lg);
+  --spacing-sidebar: var(--sidebar-w);
+  --spacing-topbar: var(--topbar-h);
+  --spacing-panel: var(--panel-w);
+  --spacing-content: var(--content-max);
+
+  --animate-fade: kv-fade var(--dur-base) var(--ease-out);
+  --animate-fade-fast: kv-fade var(--dur-fast) var(--ease-out);
+  --animate-rise: kv-rise var(--dur-slow) var(--ease-out);
+  --animate-spin: kv-spin 0.8s linear infinite;
+
+  @keyframes kv-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes kv-fade {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes kv-rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px) scale(0.985);
+    }
+  }
+}
+
+@utility type-display {
+  font: var(--type-display);
+  letter-spacing: var(--tracking-display);
+}
+@utility type-h1 {
+  font: var(--type-h1);
+  letter-spacing: var(--tracking-display);
+}
+@utility type-h2 {
+  font: var(--type-h2);
+  letter-spacing: var(--tracking-tight);
+}
+@utility type-h3 {
+  font: var(--type-h3);
+}
+@utility type-body {
+  font: var(--type-body);
+}
+@utility type-ui {
+  font: var(--type-ui);
+}
+@utility type-label {
+  font: var(--type-label);
+}
+@utility type-overline {
+  font: var(--type-overline);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+@utility type-code {
+  font: var(--type-code);
+}
