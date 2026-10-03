@@ -1,0 +1,36 @@
+@layer base {
+  html,
+  body {
+    margin: 0;
+  }
+  body {
+    background: var(--bg-app);
+    color: var(--fg-1);
+    font: var(--type-ui);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  a {
+    color: var(--accent-text);
+    text-decoration: none;
+  }
+  a:hover {
+    color: var(--fg-1);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-mono);
+  }
+  ::selection {
+    background: rgba(74, 114, 255, 0.35);
+  }
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+}

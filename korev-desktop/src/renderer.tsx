@@ -12,8 +12,16 @@
  * https://electronjs.org/docs/tutorial/security
  */
 
-import './index.css';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import './design-system/styles/index.css';
+import { Gallery } from './app/Gallery';
 
-console.log(
-  '👋 This message is being logged by the renderer process, included via Vite',
+const root = document.getElementById('root');
+if (!root) throw new Error('Missing #root element');
+
+createRoot(root).render(
+  <StrictMode>
+    <Gallery />
+  </StrictMode>,
 );
