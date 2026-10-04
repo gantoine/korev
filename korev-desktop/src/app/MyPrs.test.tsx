@@ -70,6 +70,14 @@ describe('MyPrs', () => {
     expect(within(repoHeader('acme/web')).getByText('2 need you')).toBeTruthy();
   });
 
+  it("shows the repo owner's avatar in the repo header when GitHub has one", () => {
+    const avatarUrl = 'https://avatars.githubusercontent.com/u/1?s=32';
+    renderMyPrs(makeSnapshot({ repoAvatars: { 'acme/web': avatarUrl } }));
+
+    expect(repoHeader('acme/web').querySelector('img')?.src).toBe(avatarUrl);
+    expect(repoHeader('acme/api').querySelector('img')).toBeNull();
+  });
+
   it('collapses a repo with ArrowLeft, keeps its urgency badge and saves the choice', async () => {
     renderMyPrs();
     const header = repoHeader('acme/web');

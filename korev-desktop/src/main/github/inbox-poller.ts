@@ -103,6 +103,7 @@ export function emptySnapshot(repoCount = 0): InboxSnapshot {
     reviewCount: 0,
     problems: [],
     repoMerge: {},
+    repoAvatars: {},
     actions: {},
     truncated: { mine: false, reviews: false },
     stacksUnavailable: false,
@@ -337,6 +338,7 @@ class GithubInboxPoller implements InboxPoller {
         mergeWith: this.deps.mergeWith(),
       }),
       repoMerge: fetched.repoMerge,
+      repoAvatars: fetched.repoAvatars,
     };
   }
 

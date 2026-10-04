@@ -4,6 +4,7 @@ import {
   FILES_LIMIT,
   LATEST_REVIEWS_LIMIT,
   PR_COMMENTS_LIMIT,
+  REPO_AVATAR_SIZE,
   ORGANIZATIONS_LIMIT,
   REVIEW_REQUESTS_LIMIT,
   REPO_PAGE_SIZE,
@@ -46,7 +47,8 @@ const OWNER_VARIABLE_PREFIX = 'owner';
 const NAME_VARIABLE_PREFIX = 'name';
 const REPO_ACCESS_FIELDS = `nameWithOwner viewerPermission isArchived
     viewerDefaultMergeMethod mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed
-    mergeQueue { id }`;
+    mergeQueue { id }
+    owner { avatarUrl(size: ${REPO_AVATAR_SIZE}) }`;
 const IN_NAME_QUALIFIER = 'in:name';
 
 export type InboxQueryVariables = {

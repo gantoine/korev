@@ -81,7 +81,9 @@ and open `#gallery`).
 - Both lists group PRs by repo first, in the order set in Settings → Repositories →
   Inbox order. Repos Korev no longer watches go last, alphabetically. A repo with no PRs
   is hidden.
-- **Repo header:** about 36px, a listbox option. Chevron, the repo name in mono
+- **Repo header:** about 36px, a listbox option. Chevron, the owner's GitHub avatar
+  (16px, `rounded-xs`, decorative; left out when GitHub has none or it fails to load),
+  the repo name in mono
   `type-ui` semibold `fg-1`, a mono count in `fg-2` ("3 open", "2 waiting") and the
   repo urgency badge. Sticky on `bg-app` with a `border-1` bottom hairline, never a
   card. It sits below the updates pill.

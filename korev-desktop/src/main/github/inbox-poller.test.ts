@@ -37,6 +37,7 @@ function inboxResult(
     problems: [],
     renamedRepos: [],
     repoMerge: {},
+    repoAvatars: {},
     stacksUnavailable: false,
   };
 }

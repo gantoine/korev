@@ -169,6 +169,7 @@ export interface InboxSnapshot {
   reviewCount: number;
   problems: Problem[];
   repoMerge: Record<string, RepoMergeInfo>;
+  repoAvatars: Record<string, string>;
   actions: Record<string, PrActionState>;
   truncated: { mine: boolean; reviews: boolean };
   stacksUnavailable: boolean;

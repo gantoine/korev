@@ -15,6 +15,7 @@ export interface RepoAccessReport {
   problems: Problem[];
   renames: RepoRename[];
   merge: Record<string, RepoMergeInfo>;
+  avatars: Record<string, string>;
 }
 
 export interface RepoAccessResponse {
@@ -32,6 +33,7 @@ interface RepoAccessNode {
   squashMergeAllowed?: boolean;
   rebaseMergeAllowed?: boolean;
   mergeQueue?: { id: string } | null;
+  owner?: { avatarUrl?: string } | null;
 }
 
 const MERGE_METHODS: Record<string, MergeMethod> = {
@@ -51,6 +53,19 @@ function toMergeInfo(node: RepoAccessNode): RepoMergeInfo {
     allowedMethods: allowed.filter(([, on]) => on).map(([method]) => method),
     hasMergeQueue: Boolean(node.mergeQueue),
   };
+}
+
+function avatarsByRepo(
+  targets: RepoAccessTarget[],
+  data: object,
+): Record<string, string> {
+  return Object.fromEntries(
+    targets.flatMap((target) => {
+      const node = accessNode(target, data);
+      const avatarUrl = node?.owner?.avatarUrl;
+      return node && avatarUrl ? [[node.nameWithOwner, avatarUrl]] : [];
+    }),
+  );
 }
 
 function mergeInfoByRepo(
@@ -90,6 +105,7 @@ export function readRepoAccess(
       targets.map((target) => targetRename(target, response.data)),
     ),
     merge: mergeInfoByRepo(targets, response.data),
+    avatars: avatarsByRepo(targets, response.data),
   };
 }
 

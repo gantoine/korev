@@ -176,14 +176,16 @@ function urgentLabel(group: ReviewRepoGroup): string | null {
 
 interface ReviewRepoViewProps {
   group: ReviewRepoGroup;
+  avatarUrl?: string;
   collapsed: CollapsedRepos;
 }
 
-function ReviewRepoView({ group, collapsed }: ReviewRepoViewProps) {
+function ReviewRepoView({ group, avatarUrl, collapsed }: ReviewRepoViewProps) {
   if (group.entries.length === 0 && group.approved.length === 0) return null;
   return (
     <RepoBlock
       repo={group.repo}
+      avatarUrl={avatarUrl}
       countLabel={`${requestedInGroup(group).length} waiting`}
       urgentLabel={urgentLabel(group)}
       expanded={!collapsed.isCollapsed(group.repo)}
@@ -212,7 +214,12 @@ function ReviewGroups({
         <p className="m-0 px-5 pt-4 pb-2 text-sm text-fg-2">{NO_REVIEWS}</p>
       ) : null}
       {snapshot.reviews.map((group) => (
-        <ReviewRepoView key={group.repo} group={group} collapsed={collapsed} />
+        <ReviewRepoView
+          key={group.repo}
+          group={group}
+          avatarUrl={snapshot.repoAvatars[group.repo]}
+          collapsed={collapsed}
+        />
       ))}
     </>
   );

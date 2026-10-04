@@ -345,6 +345,7 @@ export function makeSnapshot(
     reviewCount: 4,
     problems: [],
     repoMerge: {},
+    repoAvatars: {},
     actions: {},
     truncated: { mine: false, reviews: false },
     stacksUnavailable: false,

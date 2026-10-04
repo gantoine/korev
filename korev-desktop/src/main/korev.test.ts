@@ -80,7 +80,7 @@ function previousSession(): Record<string, string> {
       login: VIEWER.login,
       avatarUrl: null,
     }),
-    [`${USER_DATA}/inbox-cache.bin`]: JSON.stringify({ version: 2, snapshot }),
+    [`${USER_DATA}/inbox-cache.bin`]: JSON.stringify({ version: 3, snapshot }),
   };
 }
 

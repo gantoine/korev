@@ -1,18 +1,33 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Badge, Icon } from '../../design-system';
 import { repoToggleKey } from './entries';
 import { useListOption } from './listbox';
 
 export interface RepoHeaderProps {
   repo: string;
+  avatarUrl?: string;
   countLabel: string;
   urgentLabel: string | null;
   expanded: boolean;
   onToggle: () => void;
 }
 
+function OwnerAvatar({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <img
+      src={src}
+      alt=""
+      className="size-4 shrink-0 rounded-xs"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 export function RepoHeader({
   repo,
+  avatarUrl,
   countLabel,
   urgentLabel,
   expanded,
@@ -30,6 +45,7 @@ export function RepoHeader({
         size={14}
         className="shrink-0 text-fg-3"
       />
+      {avatarUrl ? <OwnerAvatar key={avatarUrl} src={avatarUrl} /> : null}
       <span className="truncate font-mono text-sm font-semibold text-fg-1">
         {repo}
       </span>

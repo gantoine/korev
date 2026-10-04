@@ -66,6 +66,7 @@ export interface InboxResult {
   problems: Problem[];
   renamedRepos: RepoRename[];
   repoMerge: Record<string, RepoMergeInfo>;
+  repoAvatars: Record<string, string>;
   stacksUnavailable: boolean;
 }
 
@@ -118,6 +119,7 @@ interface CollectedSearches {
   problems: Problem[];
   renamedRepos: RepoRename[];
   repoMerge: Record<string, RepoMergeInfo>;
+  repoAvatars: Record<string, string>;
 }
 
 interface InboxPageRequest {
@@ -227,6 +229,7 @@ class GithubApiClient implements GithubClient {
       problems: uniqueProblems(searches.problems),
       renamedRepos: searches.renamedRepos,
       repoMerge: searches.repoMerge,
+      repoAvatars: searches.repoAvatars,
       stacksUnavailable: this.#stacksUnavailable,
     };
   }
@@ -271,6 +274,7 @@ class GithubApiClient implements GithubClient {
       problems: [],
       renamedRepos: [],
       repoMerge: {},
+      repoAvatars: {},
       stacksUnavailable: this.#stacksUnavailable,
     };
   }
@@ -290,6 +294,7 @@ class GithubApiClient implements GithubClient {
       problems: [],
       renamedRepos: [],
       repoMerge: {},
+      repoAvatars: {},
     };
     let accessTargets = repoAccessTargets(repos);
     while (SEARCH_KEYS.some((key) => !collected.progress[key].done)) {
@@ -501,6 +506,7 @@ function recordRepoAccess(
   );
   collected.renamedRepos.push(...access.renames);
   Object.assign(collected.repoMerge, access.merge);
+  Object.assign(collected.repoAvatars, access.avatars);
 }
 
 function toProblems(

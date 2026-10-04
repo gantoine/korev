@@ -118,15 +118,17 @@ function urgentLabel(group: MyRepoGroup): string | null {
 
 interface MyRepoViewProps {
   group: MyRepoGroup;
+  avatarUrl?: string;
   collapsed: CollapsedRepos;
 }
 
-function MyRepoView({ group, collapsed }: MyRepoViewProps) {
+function MyRepoView({ group, avatarUrl, collapsed }: MyRepoViewProps) {
   const sections = orderedSections(group);
   if (sections.length === 0) return null;
   return (
     <RepoBlock
       repo={group.repo}
+      avatarUrl={avatarUrl}
       countLabel={`${groupOpenCount(group)} open`}
       urgentLabel={urgentLabel(group)}
       expanded={!collapsed.isCollapsed(group.repo)}
@@ -176,7 +178,12 @@ export function MyPrs({ snapshot, onOpenSettings }: MyPrsProps) {
     >
       {(displayed) =>
         displayed.mine.map((group) => (
-          <MyRepoView key={group.repo} group={group} collapsed={collapsed} />
+          <MyRepoView
+            key={group.repo}
+            group={group}
+            avatarUrl={displayed.repoAvatars[group.repo]}
+            collapsed={collapsed}
+          />
         ))
       }
     </InboxList>

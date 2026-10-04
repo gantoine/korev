@@ -365,6 +365,24 @@ describe('createGithubClient', () => {
       expect(inbox.problems).toEqual([]);
     });
 
+    it("reads each watched repo's owner avatar", async () => {
+      const avatarUrl = 'https://avatars.githubusercontent.com/u/1?s=32';
+      const { client } = setup(
+        inboxResponse({
+          access: {
+            repo0: { ...readableRepo('acme/api'), owner: { avatarUrl } },
+          },
+          mine: [],
+          reviews: [],
+        }),
+        teamsResponse,
+      );
+
+      const inbox = await client.fetchInbox(TOKEN, ['acme/api']);
+
+      expect(inbox.repoAvatars).toEqual({ 'acme/api': avatarUrl });
+    });
+
     it('notes an archived repo', async () => {
       const { client } = setup(
         inboxResponse({

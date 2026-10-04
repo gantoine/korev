@@ -124,7 +124,11 @@ function connection(nodes: unknown[]) {
   return { pageInfo: { hasNextPage: false, endCursor: null }, nodes };
 }
 
-function accessAliases(request: GraphqlRequest, mergeQueueRepos: string[]) {
+function accessAliases(
+  request: GraphqlRequest,
+  mergeQueueRepos: string[],
+  ownerAvatarUrl: string | null,
+) {
   const variables = request.variables ?? {};
   return Object.fromEntries(
     [...request.query.matchAll(ACCESS_ALIAS)].map(([, alias, owner, name]) => [
@@ -142,6 +146,7 @@ function accessAliases(request: GraphqlRequest, mergeQueueRepos: string[]) {
         )
           ? { id: 'MQ_1' }
           : null,
+        owner: { avatarUrl: ownerAvatarUrl },
       },
     ]),
   );
@@ -181,6 +186,7 @@ function sendJson(
 
 export interface FakeGithubOptions {
   mergeQueueRepos?: string[];
+  ownerAvatarUrl?: string;
   includeNewPr?: boolean;
 }
 
@@ -281,7 +287,11 @@ export async function startFakeGithub(
     if (query.includes('query Inbox')) {
       return {
         viewer: { login: VIEWER_LOGIN, avatarUrl: null },
-        ...accessAliases(request, mergeQueueRepos),
+        ...accessAliases(
+          request,
+          mergeQueueRepos,
+          options.ownerAvatarUrl ?? null,
+        ),
         mine: connection(myPrs.map((spec) => prNode(spec, stateOf(spec)))),
         reviews: connection([]),
       };
