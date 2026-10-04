@@ -19,6 +19,7 @@ import { appMenuTemplate } from './main/app-menu';
 import { isAppUrl, type AppOrigin } from './main/app-origin';
 import { nodeFileSystem } from './main/file-system';
 import { registerIpcHandlers } from './main/ipc';
+import { githubEndpoints } from './main/github/config';
 import { createKorev, type Korev } from './main/korev';
 import { createSafeStorageCipher } from './main/safe-storage-cipher';
 import { restorableBounds } from './main/window-bounds';
@@ -68,6 +69,7 @@ function createKorevApp(): Korev {
     fs: nodeFileSystem,
     cipher: createSafeStorageCipher(safeStorage, process.platform),
     fetch: (input, init) => fetch(input, init),
+    github: githubEndpoints(app.isPackaged, process.env),
     sleep: (milliseconds, signal) => delay(milliseconds, undefined, { signal }),
     openExternal: (url) => shell.openExternal(url),
     applyTheme: (theme) => {

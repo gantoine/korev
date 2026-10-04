@@ -1,3 +1,4 @@
+import { ORG_RESTRICTION_PATTERN, SSO_HEADER } from './access';
 import { GITHUB_API_VERSION, GITHUB_USER_AGENT } from './config';
 import {
   AuthLostError,
@@ -59,7 +60,6 @@ const MS_PER_SECOND = 1000;
 const ABORT_ERROR_NAME = 'AbortError';
 const SSO_REQUIRED_PREFIX = 'required';
 const SSO_ORG_PATTERN = /\/orgs\/([^/?#]+)\/sso/;
-const ORG_RESTRICTION_PATTERN = /OAuth App access restrictions/i;
 const RESTRICTED_ORG_PATTERN = /the [`'"]?([\w.-]+)[`'"]? organization/i;
 
 export async function githubRequest(
@@ -185,7 +185,7 @@ function rateLimitResetAtFor(
 }
 
 function forbiddenError(message: string, headers: ResponseHeaders): Error {
-  const sso = headers.get('x-github-sso');
+  const sso = headers.get(SSO_HEADER);
   if (sso?.startsWith(SSO_REQUIRED_PREFIX)) {
     return new SsoRequiredError(message, matchGroup(sso, SSO_ORG_PATTERN));
   }

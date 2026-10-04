@@ -1,9 +1,12 @@
+import { type RepoParts, isRepoName, splitRepoName } from '../repo-names';
 import {
   CHECK_CONTEXTS_LIMIT,
   FILES_LIMIT,
   LATEST_REVIEWS_LIMIT,
   ORGANIZATIONS_LIMIT,
   REVIEW_REQUESTS_LIMIT,
+  REPO_PAGE_SIZE,
+  REPO_SEARCH_SIZE,
   REVIEW_THREADS_LIMIT,
   SEARCH_PAGE_SIZE,
   STACK_ENTRIES_LIMIT,
@@ -22,9 +25,25 @@ export const SUGGESTED_REPOS_SEARCH = {
   requested: 'is:open is:pr review-requested:@me archived:false',
 } as const;
 
+export interface RepoAccessTarget extends RepoParts {
+  repo: string;
+  alias: string;
+  ownerVariable: string;
+  nameVariable: string;
+}
+
 export interface InboxQueryOptions {
   includeStacks: boolean;
+  accessTargets: RepoAccessTarget[];
 }
+
+export type OwnerQualifier = 'org' | 'user';
+
+const REPO_ALIAS_PREFIX = 'repo';
+const OWNER_VARIABLE_PREFIX = 'owner';
+const NAME_VARIABLE_PREFIX = 'name';
+const REPO_ACCESS_FIELDS = 'nameWithOwner viewerPermission isArchived';
+const IN_NAME_QUALIFIER = 'in:name';
 
 export type InboxQueryVariables = {
   mineQuery: string;
@@ -37,6 +56,53 @@ export type InboxQueryVariables = {
 
 export function searchString(base: string, repos: string[]): string {
   return [base, ...repos.map((repo) => `repo:${repo}`)].join(' ');
+}
+
+export function repoAccessTargets(repos: string[]): RepoAccessTarget[] {
+  return repos.filter(isRepoName).map((repo, index) => ({
+    repo,
+    ...splitRepoName(repo),
+    alias: `${REPO_ALIAS_PREFIX}${index}`,
+    ownerVariable: `${OWNER_VARIABLE_PREFIX}${index}`,
+    nameVariable: `${NAME_VARIABLE_PREFIX}${index}`,
+  }));
+}
+
+export function repoAccessVariables(
+  targets: RepoAccessTarget[],
+): Record<string, string> {
+  return Object.fromEntries(
+    targets.flatMap((target) => [
+      [target.ownerVariable, target.owner],
+      [target.nameVariable, target.name],
+    ]),
+  );
+}
+
+function repoAccessDeclarations(targets: RepoAccessTarget[]): string {
+  return targets
+    .map(
+      (target) =>
+        `$${target.ownerVariable}: String!\n  $${target.nameVariable}: String!`,
+    )
+    .join('\n  ');
+}
+
+function repoAccessSelections(targets: RepoAccessTarget[]): string {
+  return targets
+    .map(
+      (target) =>
+        `${target.alias}: repository(owner: $${target.ownerVariable}, name: $${target.nameVariable}) { ${REPO_ACCESS_FIELDS} }`,
+    )
+    .join('\n  ');
+}
+
+export function repoSearchString(
+  qualifier: OwnerQualifier,
+  owner: string,
+  words: string,
+): string {
+  return `${qualifier}:${owner} ${words} ${IN_NAME_QUALIFIER}`;
 }
 
 const REVIEWER_FIELDS = `
@@ -139,8 +205,10 @@ query Inbox(
   $includeReviews: Boolean!
   $mineCursor: String
   $reviewsCursor: String
+  ${repoAccessDeclarations(options.accessTargets)}
 ) {
   viewer { login avatarUrl }
+  ${repoAccessSelections(options.accessTargets)}
   mine: search(
     type: ISSUE
     first: ${SEARCH_PAGE_SIZE}
@@ -209,4 +277,35 @@ query SuggestedRepos {
   ${Object.entries(SUGGESTED_REPOS_SEARCH)
     .map(([alias, query]) => repositorySearch(alias, query))
     .join('\n')}
+}`;
+
+export const REPO_OWNERS_QUERY = `
+query RepoOwners {
+  viewer {
+    login
+    organizations(first: ${ORGANIZATIONS_LIMIT}) { nodes { login } }
+  }
+}`;
+
+export const REPO_PAGE_QUERY = `
+query RepoPage($owner: String!, $cursor: String) {
+  repositoryOwner(login: $owner) {
+    repositories(
+      first: ${REPO_PAGE_SIZE}
+      after: $cursor
+      ownerAffiliations: [OWNER]
+      orderBy: { field: PUSHED_AT, direction: DESC }
+    ) {
+      totalCount
+      pageInfo { hasNextPage endCursor }
+      nodes { nameWithOwner }
+    }
+  }
+}`;
+
+export const REPO_SEARCH_QUERY = `
+query RepoSearch($query: String!) {
+  search(type: REPOSITORY, query: $query, first: ${REPO_SEARCH_SIZE}) {
+    nodes { ... on Repository { nameWithOwner } }
+  }
 }`;

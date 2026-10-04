@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { AuthState, TokenResult } from '../shared/auth';
 import { korev } from './bridge';
+import { forgetRepoCatalog } from './repos/repo-catalog';
 import { createBridgeStore } from './store';
 
 const authStore = createBridgeStore<AuthState>(() => ({
@@ -29,11 +30,14 @@ export async function cancelDeviceFlow(): Promise<void> {
 
 export async function connectWithToken(token: string): Promise<TokenResult> {
   const result = await korev().auth.useToken(token);
-  if (result.ok) patchAuth({ connection: result.connection });
+  if (!result.ok) return result;
+  forgetRepoCatalog();
+  patchAuth({ connection: result.connection });
   return result;
 }
 
 export async function disconnect(): Promise<void> {
   await korev().auth.disconnect();
+  forgetRepoCatalog();
   patchAuth({ connection: null, login: { status: 'idle' } });
 }

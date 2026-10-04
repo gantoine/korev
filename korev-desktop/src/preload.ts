@@ -36,6 +36,12 @@ const bridge: KorevBridge = {
     setTheme: (theme) => invoke(IpcChannel.SettingsSetTheme, theme),
     setLastView: (view) => invoke(IpcChannel.SettingsSetLastView, view),
     suggestedRepos: () => invoke(IpcChannel.SettingsSuggestedRepos),
+    onChanged: (listener) => subscribe(IpcChannel.SettingsChanged, listener),
+  },
+  repos: {
+    owners: () => invoke(IpcChannel.ReposOwners),
+    page: (owner, cursor) => invoke(IpcChannel.ReposPage, owner, cursor),
+    search: (owner, term) => invoke(IpcChannel.ReposSearch, owner, term),
   },
   shell: {
     openGithub: (url) => invoke(IpcChannel.ShellOpenGithub, url),

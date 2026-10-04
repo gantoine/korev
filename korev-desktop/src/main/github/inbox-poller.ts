@@ -15,6 +15,7 @@ import {
   type NotificationsResult,
   shouldRefreshFromNotifications,
 } from './notifications';
+import type { RepoRename } from './repo-access';
 
 export type InboxPollerClient = Pick<
   GithubClient,
@@ -33,6 +34,7 @@ export interface InboxPollerDeps {
   buildInbox(input: InboxInput): Inbox;
   token(): string | null;
   repos(): string[];
+  renameRepos(renames: RepoRename[]): Promise<void>;
   now(): Date;
   scheduler: Scheduler;
   publish(snapshot: InboxSnapshot): void;
@@ -233,11 +235,24 @@ class GithubInboxPoller implements InboxPoller {
       );
       if (epoch !== this.#epoch) return;
       this.#enterLive(fetched, token, repos.length, startedAt);
+      await this.#followRenames(fetched.renamedRepos, epoch);
     } catch (error) {
       if (epoch !== this.#epoch) return;
       this.#lastSyncFinishedAt = this.deps.now().getTime();
       this.#enterFailure(error);
     }
+  }
+
+  async #followRenames(renames: RepoRename[], epoch: number): Promise<void> {
+    if (renames.length === 0) return;
+    await this.deps.renameRepos(renames);
+    if (epoch !== this.#epoch || this.#stillSelected(renames)) return;
+    this.#followUpQueued = true;
+  }
+
+  #stillSelected(renames: RepoRename[]): boolean {
+    const selected = this.deps.repos();
+    return renames.some((rename) => selected.includes(rename.from));
   }
 
   #enterIdle(repoCount: number): void {

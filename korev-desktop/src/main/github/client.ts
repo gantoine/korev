@@ -1,5 +1,8 @@
 import type { Problem } from '../../shared/inbox';
 import type { PullRequest } from '../../shared/pull-request';
+import type { RepoOwner, RepoPage } from '../../shared/repos';
+import { splitRepoName } from '../repo-names';
+import { SSO_HEADER, accessActionUrl, classifyAccess } from './access';
 import { SEARCH_RESULT_CAP } from './config';
 import { StackFieldRejectedError, redactToken } from './errors';
 import { type GraphqlError, type GraphqlPathSegment, graphql } from './graphql';
@@ -18,14 +21,23 @@ import {
 import {
   INBOX_SEARCH,
   type InboxQueryVariables,
+  type RepoAccessTarget,
   REVIEW_THREADS_QUERY,
   SUGGESTED_REPOS_QUERY,
   VIEWER_QUERY,
   VIEWER_TEAMS_QUERY,
   buildInboxQuery,
+  repoAccessTargets,
+  repoAccessVariables,
   searchString,
 } from './queries';
-import type { FetchLike } from './request';
+import {
+  type RepoRename,
+  isRepoAccessError,
+  readRepoAccess,
+} from './repo-access';
+import { RepoPicker } from './repo-picker';
+import type { FetchLike, ResponseHeaders } from './request';
 
 export interface GithubClientDeps {
   fetch: FetchLike;
@@ -50,6 +62,7 @@ export interface InboxResult {
   reviews: PullRequest[];
   truncated: { mine: boolean; reviews: boolean };
   problems: Problem[];
+  renamedRepos: RepoRename[];
   stacksUnavailable: boolean;
 }
 
@@ -65,6 +78,13 @@ export interface GithubClient {
     token: string,
     request: NotificationsRequest,
   ): Promise<NotificationsResult>;
+  fetchRepoOwners(token: string): Promise<RepoOwner[]>;
+  fetchRepoPage(
+    token: string,
+    owner: string,
+    cursor: string | null,
+  ): Promise<RepoPage>;
+  searchRepos(token: string, owner: string, term: string): Promise<string[]>;
   clearSessionCache(): void;
 }
 
@@ -93,6 +113,12 @@ interface CollectedSearches {
   viewerLogin: string;
   progress: Record<SearchKey, SearchProgress>;
   problems: Problem[];
+  renamedRepos: RepoRename[];
+}
+
+interface InboxPageRequest {
+  variables: InboxQueryVariables;
+  accessTargets: RepoAccessTarget[];
 }
 
 interface ViewerTeamsData {
@@ -120,12 +146,33 @@ export function createGithubClient(deps: GithubClientDeps): GithubClient {
 class GithubApiClient implements GithubClient {
   #stacksUnavailable = false;
   #teamsByLogin = new Map<string, ViewerTeam[]>();
+  #repoPicker = new RepoPicker(
+    <TData>(token: string, query: string, variables: Record<string, unknown>) =>
+      this.#query<TData>(token, query, variables),
+  );
 
   constructor(private readonly deps: GithubClientDeps) {}
 
   clearSessionCache(): void {
     this.#stacksUnavailable = false;
     this.#teamsByLogin.clear();
+    this.#repoPicker.clear();
+  }
+
+  fetchRepoOwners(token: string): Promise<RepoOwner[]> {
+    return this.#repoPicker.owners(token);
+  }
+
+  fetchRepoPage(
+    token: string,
+    owner: string,
+    cursor: string | null,
+  ): Promise<RepoPage> {
+    return this.#repoPicker.page(token, owner, cursor);
+  }
+
+  searchRepos(token: string, owner: string, term: string): Promise<string[]> {
+    return this.#repoPicker.search(token, owner, term);
   }
 
   async fetchViewer(token: string, signal?: AbortSignal): Promise<Viewer> {
@@ -171,6 +218,7 @@ class GithubApiClient implements GithubClient {
         reviews: searches.progress.reviews.truncated,
       },
       problems: uniqueProblems(searches.problems),
+      renamedRepos: searches.renamedRepos,
       stacksUnavailable: this.#stacksUnavailable,
     };
   }
@@ -213,6 +261,7 @@ class GithubApiClient implements GithubClient {
       reviews: [],
       truncated: { mine: false, reviews: false },
       problems: [],
+      renamedRepos: [],
       stacksUnavailable: this.#stacksUnavailable,
     };
   }
@@ -230,29 +279,46 @@ class GithubApiClient implements GithubClient {
       viewerLogin: '',
       progress: { mine: startProgress(), reviews: startProgress() },
       problems: [],
+      renamedRepos: [],
     };
+    let accessTargets = repoAccessTargets(repos);
     while (SEARCH_KEYS.some((key) => !collected.progress[key].done)) {
       const variables = inboxVariables(queries, collected.progress);
-      const result = await this.#inboxPage(token, variables, signal);
+      const result = await this.#inboxPage(
+        token,
+        { variables, accessTargets },
+        signal,
+      );
       collected.viewerLogin = result.data.viewer.login;
-      collected.problems.push(...toProblems(result.errors, result.data, token));
+      recordRepoAccess(collected, accessTargets, result, token);
       collected.progress = advanceAll(collected.progress, result.data);
+      accessTargets = [];
     }
     return collected;
   }
 
   async #inboxPage(
     token: string,
-    variables: InboxQueryVariables,
+    request: InboxPageRequest,
     signal?: AbortSignal,
   ) {
-    const query = buildInboxQuery({ includeStacks: !this.#stacksUnavailable });
+    const variables = {
+      ...request.variables,
+      ...repoAccessVariables(request.accessTargets),
+    };
+    const query = buildInboxQuery({
+      includeStacks: !this.#stacksUnavailable,
+      accessTargets: request.accessTargets,
+    });
     try {
       return await this.#query<InboxData>(token, query, variables, signal);
     } catch (error) {
       if (!(error instanceof StackFieldRejectedError)) throw error;
       this.#stacksUnavailable = true;
-      const withoutStacks = buildInboxQuery({ includeStacks: false });
+      const withoutStacks = buildInboxQuery({
+        includeStacks: false,
+        accessTargets: request.accessTargets,
+      });
       return this.#query<InboxData>(token, withoutStacks, variables, signal);
     }
   }
@@ -403,15 +469,46 @@ function uniqueById(nodes: PullRequestNode[]): PullRequestNode[] {
   return [...new Map(nodes.map((node) => [node.id, node])).values()];
 }
 
+function recordRepoAccess(
+  collected: CollectedSearches,
+  accessTargets: RepoAccessTarget[],
+  result: { data: InboxData; errors: GraphqlError[]; headers: ResponseHeaders },
+  token: string,
+): void {
+  const ssoHeader = result.headers.get(SSO_HEADER);
+  const access = readRepoAccess(accessTargets, {
+    data: result.data,
+    errors: result.errors,
+    ssoHeader,
+    token,
+  });
+  const otherErrors = result.errors.filter(
+    (error) => !isRepoAccessError(error, accessTargets),
+  );
+  collected.problems.push(
+    ...access.problems,
+    ...toProblems(otherErrors, result.data, ssoHeader, token),
+  );
+  collected.renamedRepos.push(...access.renames);
+}
+
 function toProblems(
   errors: GraphqlError[],
   data: unknown,
+  ssoHeader: string | null,
   token: string,
 ): Problem[] {
-  return errors.map((error) => ({
-    repo: repoAtPath(data, error.path ?? []),
-    message: redactToken(error.message, token),
-  }));
+  return errors.map((error) => {
+    const repo = repoAtPath(data, error.path ?? []);
+    const kind = classifyAccess(error, ssoHeader);
+    const owner = repo ? splitRepoName(repo).owner : null;
+    return {
+      kind,
+      repo,
+      message: redactToken(error.message, token),
+      actionUrl: accessActionUrl(kind, owner, ssoHeader),
+    };
+  });
 }
 
 function repoAtPath(root: unknown, path: GraphqlPathSegment[]): string | null {

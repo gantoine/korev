@@ -14,7 +14,13 @@ export function TokenForm() {
     setSaving(true);
     const result = await connectWithToken(token.trim());
     setSaving(false);
-    setError(result.ok ? undefined : result.message);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    setError(undefined);
+    setToken('');
+    setOpen(false);
   }
 
   if (!open) {

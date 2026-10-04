@@ -6,10 +6,10 @@ import {
   type WindowBounds,
 } from '../shared/settings';
 import type { FileSystem } from './file-system';
+import { isRepoName } from './repo-names';
 
 const THEMES: readonly ThemePreference[] = ['system', 'light', 'dark'];
 const VIEWS: readonly InboxView[] = ['review', 'mine'];
-const REPO_PATTERN = /^[\w.-]+\/[\w.-]+$/;
 const CORRUPT_SETTINGS_PROBLEM = 'Settings were reset';
 
 export interface SettingsLoadResult {
@@ -21,10 +21,6 @@ export interface SettingsStore {
   load(): Promise<SettingsLoadResult>;
   current(): Settings;
   update(patch: Partial<Settings>): Promise<Settings>;
-}
-
-export function isRepoName(value: unknown): value is string {
-  return typeof value === 'string' && REPO_PATTERN.test(value);
 }
 
 function pickRepos(value: unknown): string[] {
@@ -88,4 +84,18 @@ export function createSettingsStore(deps: {
   }
 
   return { load, update, current: () => settings };
+}
+
+export function notifyOnChange(
+  store: SettingsStore,
+  onChange: (settings: Settings) => void,
+): SettingsStore {
+  return {
+    ...store,
+    async update(patch) {
+      const updated = await store.update(patch);
+      onChange(updated);
+      return updated;
+    },
+  };
 }

@@ -2,29 +2,22 @@ import { useState } from 'react';
 import { Button } from '../../design-system';
 import type { Connection } from '../../shared/auth';
 import { pluralize } from '../format';
-import { AddRepoInput } from '../repos/AddRepoInput';
-import { RepoChecklist } from '../repos/RepoChecklist';
-import { uniqueRepos } from '../repos/repo-name';
+import { RepoPicker } from '../repos/RepoPicker';
+import { uniqueRepos, withRepo } from '../repos/repo-name';
 import { useSuggestedRepos } from '../repos/useSuggestedRepos';
 import { saveRepos } from '../useSettings';
 
 export function RepoStep({ connection }: { connection: Connection }) {
   const suggested = useSuggestedRepos();
-  const [added, setAdded] = useState<string[]>([]);
+  const [touched, setTouched] = useState<string[]>([]);
   const [unchecked, setUnchecked] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const listed = uniqueRepos(suggested, added);
-  const selected = listed.filter((repo) => !unchecked.includes(repo));
+  const pinned = uniqueRepos(suggested, touched);
+  const selected = pinned.filter((repo) => !unchecked.includes(repo));
 
   function toggle(repo: string, checked: boolean) {
-    setUnchecked((current) =>
-      checked ? current.filter((other) => other !== repo) : [...current, repo],
-    );
-  }
-
-  function add(repo: string) {
-    setAdded((current) => uniqueRepos(current, [repo]));
-    toggle(repo, true);
+    setTouched((current) => uniqueRepos(current, [repo]));
+    setUnchecked((current) => withRepo(current, repo, !checked));
   }
 
   function openInbox() {
@@ -40,19 +33,15 @@ export function RepoStep({ connection }: { connection: Connection }) {
       <p className="mt-1 mb-4 text-sm text-fg-3">
         Pick the repos Korev watches. You can change them later in Settings.
       </p>
-      {listed.length > 0 ? (
-        <>
-          <h2 className="mt-0 mb-2 type-overline text-fg-3">Suggested</h2>
-          <RepoChecklist repos={listed} selected={selected} onToggle={toggle} />
-        </>
-      ) : (
-        <p className="m-0 text-xs text-fg-3">
-          No suggestions yet. Add a repo by name.
-        </p>
-      )}
-      <div className="mt-4">
-        <AddRepoInput onAdd={add} />
-      </div>
+      <RepoPicker
+        pinned={{
+          title: 'Suggested',
+          repos: pinned,
+          emptyMessage: 'No suggestions yet. Pick repos from the list below.',
+        }}
+        selected={selected}
+        onToggle={toggle}
+      />
       <Button
         variant="primary"
         size="lg"

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createGithubClient } from './client';
+import { GITHUB_OAUTH_CLIENT_ID } from './config';
 import { GraphqlQueryError } from './errors';
+import {
+  ORG_RESTRICTION_MESSAGE,
+  SAML_MESSAGE,
+} from './fixtures/access-errors';
 import inboxPage from './fixtures/inbox-page.json';
 import type { GraphqlError } from './graphql';
 import type { PullRequestNode } from './nodes';
@@ -23,6 +28,12 @@ interface PageOptions {
   reviews?: (PullRequestNode | null)[] | null;
   reviewsCursor?: string | null;
   errors?: GraphqlError[];
+  access?: Record<string, unknown>;
+  headers?: Record<string, string>;
+}
+
+function readableRepo(nameWithOwner: string, isArchived = false) {
+  return { nameWithOwner, viewerPermission: 'WRITE', isArchived };
 }
 
 function searchPage(
@@ -39,8 +50,10 @@ function searchPage(
 
 function inboxResponse(options: PageOptions): CannedResponse {
   return {
+    headers: options.headers,
     body: {
       data: {
+        ...options.access,
         viewer: inboxPage.data.viewer,
         mine: searchPage(options.mine, options.mineCursor),
         reviews: searchPage(options.reviews, options.reviewsCursor),
@@ -159,6 +172,8 @@ describe('createGithubClient', () => {
         includeReviews: false,
         mineCursor: 'cursor-1',
       });
+      expect(queryOf(fake, 0)).toContain('repository(');
+      expect(queryOf(fake, 1)).not.toContain('repository(');
       expect(inbox.mine.map((item) => item.number)).toEqual([1, 2]);
       expect(inbox.reviews.map((item) => item.number)).toEqual([530]);
       expect(inbox.viewerTeams).toEqual([{ org: 'acme', slug: 'backend' }]);
@@ -206,11 +221,150 @@ describe('createGithubClient', () => {
       expect(inbox.mine.map((item) => item.number)).toEqual([7]);
       expect(inbox.reviews.map((item) => item.number)).toEqual([530]);
       expect(inbox.problems).toEqual([
-        { repo: 'acme/api', message: 'Resource not accessible by integration' },
         {
+          kind: 'other',
+          repo: 'acme/api',
+          message: 'Resource not accessible by integration',
+          actionUrl: null,
+        },
+        {
+          kind: 'sso',
           repo: null,
           message: 'Resource protected by organization SAML enforcement.',
+          actionUrl: null,
         },
+      ]);
+    });
+
+    it('reports an unreadable repo and keeps the PRs of the other repos', async () => {
+      const { fake, client } = setup(
+        inboxResponse({
+          access: { repo0: readableRepo('acme/api'), repo1: null },
+          errors: [
+            {
+              type: 'NOT_FOUND',
+              path: ['repo1'],
+              message:
+                "Could not resolve to a Repository with the name 'acme/gone'.",
+            },
+          ],
+          mine: [pr(singleNode, 1, 'acme/api')],
+          reviews: [],
+        }),
+        teamsResponse,
+      );
+
+      const inbox = await client.fetchInbox(TOKEN, ['acme/api', 'acme/gone']);
+
+      expect(inbox.mine.map((item) => item.number)).toEqual([1]);
+      expect(inbox.problems).toEqual([
+        expect.objectContaining({
+          kind: 'not_found',
+          repo: 'acme/gone',
+          actionUrl: null,
+        }),
+      ]);
+      expect(variablesOf(fake, 0)).toMatchObject({
+        owner1: 'acme',
+        name1: 'gone',
+      });
+      expect(queryOf(fake, 0)).not.toContain('gone');
+    });
+
+    it('links a repo blocked by OAuth App restrictions to the Korev grant page', async () => {
+      const { client } = setup(
+        inboxResponse({
+          access: { repo0: null },
+          errors: [
+            {
+              type: 'FORBIDDEN',
+              path: ['repo0'],
+              message: ORG_RESTRICTION_MESSAGE,
+            },
+          ],
+          mine: [],
+          reviews: [],
+        }),
+        teamsResponse,
+      );
+
+      const inbox = await client.fetchInbox(TOKEN, ['acme/api']);
+
+      expect(inbox.problems).toEqual([
+        expect.objectContaining({
+          kind: 'restricted',
+          repo: 'acme/api',
+          actionUrl: `https://github.com/settings/connections/applications/${GITHUB_OAUTH_CLIENT_ID}`,
+        }),
+      ]);
+    });
+
+    it.each([
+      {
+        header: 'partial-results; organizations=1234',
+        actionUrl: 'https://github.com/orgs/acme/sso',
+      },
+      {
+        header:
+          'required; url=https://github.com/orgs/acme/sso?authorization_request=abc',
+        actionUrl: 'https://github.com/orgs/acme/sso?authorization_request=abc',
+      },
+    ])(
+      'links a repo behind SAML to the SSO page for header "$header"',
+      async ({ header, actionUrl }) => {
+        const { client } = setup(
+          inboxResponse({
+            access: { repo0: null },
+            errors: [
+              { type: 'FORBIDDEN', path: ['repo0'], message: SAML_MESSAGE },
+            ],
+            headers: { 'X-GitHub-SSO': header },
+            mine: [],
+            reviews: [],
+          }),
+          teamsResponse,
+        );
+
+        const inbox = await client.fetchInbox(TOKEN, ['acme/api']);
+
+        expect(inbox.problems).toEqual([
+          expect.objectContaining({ kind: 'sso', actionUrl }),
+        ]);
+      },
+    );
+
+    it('reports a renamed repo with its new name', async () => {
+      const { client } = setup(
+        inboxResponse({
+          access: { repo0: readableRepo('acme/api-v2') },
+          mine: [],
+          reviews: [],
+        }),
+        teamsResponse,
+      );
+
+      const inbox = await client.fetchInbox(TOKEN, ['acme/api']);
+
+      expect(inbox.renamedRepos).toEqual([
+        { from: 'acme/api', to: 'acme/api-v2' },
+      ]);
+      expect(inbox.problems).toEqual([]);
+    });
+
+    it('notes an archived repo', async () => {
+      const { client } = setup(
+        inboxResponse({
+          access: { repo0: readableRepo('acme/api', true) },
+          mine: [],
+          reviews: [],
+        }),
+        teamsResponse,
+      );
+
+      const inbox = await client.fetchInbox(TOKEN, ['acme/api']);
+
+      expect(inbox.problems).toEqual([
+        expect.objectContaining({ kind: 'archived', repo: 'acme/api' }),
       ]);
     });
 

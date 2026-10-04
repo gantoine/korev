@@ -1,12 +1,49 @@
-import { BannerGroup, type BannerItem } from '../../design-system';
-import type { InboxSnapshot, Problem } from '../../shared/inbox';
+import {
+  BannerGroup,
+  type BannerAction,
+  type BannerItem,
+  type BannerTone,
+} from '../../design-system';
+import type { InboxSnapshot, Problem, ProblemKind } from '../../shared/inbox';
 import type { InboxView } from '../../shared/settings';
+import { korev } from '../bridge';
 import { formatClock, formatCountdown, joinMeta } from '../format';
 import { SECOND_MS, useNow } from '../useNow';
 
 const SEARCH_CAP = 300;
 
 type OpenSettings = () => void;
+
+type ProblemTarget = 'github' | 'settings';
+
+interface ProblemCopy {
+  tone: BannerTone;
+  describe?: (repo: string) => string;
+  action?: { label: string; target: ProblemTarget };
+}
+
+const PROBLEM_COPY: Record<ProblemKind, ProblemCopy> = {
+  restricted: {
+    tone: 'warning',
+    describe: (repo) => `${repo} needs approval from an org owner`,
+    action: { label: 'Request access', target: 'github' },
+  },
+  sso: {
+    tone: 'warning',
+    describe: (repo) => `${repo} needs SSO authorization`,
+    action: { label: 'Authorize', target: 'github' },
+  },
+  not_found: {
+    tone: 'warning',
+    describe: (repo) => `Korev can no longer read ${repo}`,
+    action: { label: 'Check repos', target: 'settings' },
+  },
+  archived: {
+    tone: 'neutral',
+    describe: (repo) => `${repo} is archived, no new PRs`,
+  },
+  other: { tone: 'warning' },
+};
 
 function clockPhrase(prefix: string, iso: string | null): string | null {
   return iso ? `${prefix} ${formatClock(iso)}` : null;
@@ -70,14 +107,46 @@ function statusBanners(
   return [];
 }
 
-function problemBanner(problem: Problem, index: number): BannerItem {
-  return {
-    id: `problem:${index}`,
-    tone: 'warning',
-    message: problem.repo
-      ? `${problem.repo}: ${problem.message}`
-      : problem.message,
-  };
+function problemMessage(problem: Problem, copy: ProblemCopy): string {
+  const { repo, message } = problem;
+  if (!repo) return message;
+  return copy.describe ? copy.describe(repo) : `${repo}: ${message}`;
+}
+
+function openGithubAction(
+  label: string,
+  url: string | null,
+): BannerAction | undefined {
+  if (!url) return undefined;
+  return { label, onClick: () => void korev().shell.openGithub(url) };
+}
+
+function problemAction(
+  problem: Problem,
+  copy: ProblemCopy,
+  openSettings: OpenSettings,
+): BannerAction | undefined {
+  const { action } = copy;
+  if (!action) return undefined;
+  if (action.target === 'settings') {
+    return { label: action.label, onClick: openSettings };
+  }
+  return openGithubAction(action.label, problem.actionUrl);
+}
+
+function problemBanners(
+  problems: Problem[],
+  openSettings: OpenSettings,
+): BannerItem[] {
+  return problems.map((problem, index) => {
+    const copy = PROBLEM_COPY[problem.kind];
+    return {
+      id: `problem:${index}`,
+      tone: copy.tone,
+      message: problemMessage(problem, copy),
+      action: problemAction(problem, copy, openSettings),
+    };
+  });
 }
 
 function truncatedBanners(
@@ -116,7 +185,7 @@ export function inboxBanners(
 ): BannerItem[] {
   return [
     ...statusBanners(snapshot, openSettings),
-    ...snapshot.problems.map(problemBanner),
+    ...problemBanners(snapshot.problems, openSettings),
     ...truncatedBanners(snapshot, view, openSettings),
     ...stacksBanners(snapshot),
   ];

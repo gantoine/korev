@@ -5,6 +5,7 @@ import { createBridgeStore } from './store';
 
 const settingsStore = createBridgeStore<Settings>(() => ({
   load: () => korev().settings.load(),
+  watch: (listener) => korev().settings.onChanged(listener),
 }));
 
 async function applySettings(saving: Promise<Settings>): Promise<void> {

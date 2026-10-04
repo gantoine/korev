@@ -34,10 +34,10 @@ describe('AppShell', () => {
   it('ignores the ? shortcut while a text field has focus', () => {
     const { emitCommand } = renderShell();
     act(() => emitCommand('show-settings'));
-    const repoInput = screen.getByLabelText('Add a repo');
-    repoInput.focus();
+    const filter = screen.getByLabelText('Filter repos');
+    filter.focus();
 
-    fireEvent.keyDown(repoInput, { key: '?' });
+    fireEvent.keyDown(filter, { key: '?' });
     expect(screen.queryByRole('dialog')).toBeNull();
 
     fireEvent.keyDown(document.body, { key: '?' });

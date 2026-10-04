@@ -20,6 +20,10 @@ export function pluralize(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }
 
+export function formatCount(count: number): string {
+  return count.toLocaleString();
+}
+
 export function joinMeta(parts: (string | null)[]): string {
   return parts.filter(Boolean).join(' · ');
 }

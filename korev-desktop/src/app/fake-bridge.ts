@@ -2,10 +2,12 @@ import { vi } from 'vitest';
 import type { AuthState } from '../shared/auth';
 import type { InboxSnapshot } from '../shared/inbox';
 import type { AppCommand, KorevBridge } from '../shared/ipc-contract';
+import type { RepoOwner, RepoPage } from '../shared/repos';
 import type { Settings } from '../shared/settings';
 import {
   CONNECTED_AUTH,
   WATCHING_SETTINGS,
+  makeRepoPage,
   makeSnapshot,
 } from './test-fixtures';
 
@@ -14,13 +16,29 @@ export interface FakeBridgeOptions {
   auth?: AuthState;
   settings?: Settings;
   suggestedRepos?: string[];
+  owners?: RepoOwner[];
+  pages?: RepoPage[];
 }
 
 export interface FakeBridge {
   bridge: KorevBridge;
   emitInbox: (snapshot: InboxSnapshot) => void;
+  emitSettings: (settings: Settings) => void;
   emitCommand: (command: AppCommand) => void;
   stopInbox: ReturnType<typeof vi.fn>;
+}
+
+function findPage(
+  pages: RepoPage[],
+  owner: string,
+  cursor: string | null,
+): RepoPage {
+  const ownerPages = pages.filter((page) => page.owner === owner);
+  const index =
+    cursor === null
+      ? 0
+      : ownerPages.findIndex((page) => page.nextCursor === cursor) + 1;
+  return ownerPages[index] ?? makeRepoPage(owner, []);
 }
 
 export function installFakeBridge({
@@ -28,8 +46,11 @@ export function installFakeBridge({
   auth = CONNECTED_AUTH,
   settings = WATCHING_SETTINGS,
   suggestedRepos = [],
+  owners = [],
+  pages = [],
 }: FakeBridgeOptions = {}): FakeBridge {
   const inboxListeners = new Set<(next: InboxSnapshot) => void>();
+  const settingsListeners = new Set<(next: Settings) => void>();
   const stopInbox = vi.fn();
   const commandListeners = new Set<(command: AppCommand) => void>();
   const bridge: KorevBridge = {
@@ -58,6 +79,17 @@ export function installFakeBridge({
       setTheme: vi.fn(async (theme) => ({ ...settings, theme })),
       setLastView: vi.fn(async (lastView) => ({ ...settings, lastView })),
       suggestedRepos: vi.fn(async () => suggestedRepos),
+      onChanged: vi.fn((listener) => {
+        settingsListeners.add(listener);
+        return () => settingsListeners.delete(listener);
+      }),
+    },
+    repos: {
+      owners: vi.fn(async () => owners),
+      page: vi.fn(async (owner: string, cursor: string | null) =>
+        findPage(pages, owner, cursor),
+      ),
+      search: vi.fn(async () => []),
     },
     shell: { openGithub: vi.fn(async () => undefined) },
     app: {
@@ -71,6 +103,8 @@ export function installFakeBridge({
   return {
     bridge,
     emitInbox: (next) => inboxListeners.forEach((listener) => listener(next)),
+    emitSettings: (next) =>
+      settingsListeners.forEach((listener) => listener(next)),
     emitCommand: (command) =>
       commandListeners.forEach((listener) => listener(command)),
     stopInbox,

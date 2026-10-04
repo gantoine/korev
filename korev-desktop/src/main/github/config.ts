@@ -19,3 +19,27 @@ export const TEAMS_LIMIT = 100;
 export const SUGGESTED_REPOS_SEARCH_SIZE = 100;
 export const NOTIFICATIONS_PAGE_SIZE = 50;
 export const NOTIFICATIONS_PAGE_CAP = 5;
+export const REPO_PAGE_SIZE = 100;
+export const REPO_SEARCH_SIZE = 20;
+
+export interface GithubEndpoints {
+  apiUrl: string;
+  webUrl: string;
+}
+
+export const DEV_ENDPOINT_OVERRIDES = {
+  apiUrl: 'KOREV_GITHUB_API_URL',
+  webUrl: 'KOREV_GITHUB_WEB_URL',
+} as const;
+
+export function githubEndpoints(
+  isPackaged: boolean,
+  env: Record<string, string | undefined>,
+): GithubEndpoints {
+  const production = { apiUrl: GITHUB_API_URL, webUrl: GITHUB_WEB_URL };
+  if (isPackaged) return production;
+  return {
+    apiUrl: env[DEV_ENDPOINT_OVERRIDES.apiUrl] || production.apiUrl,
+    webUrl: env[DEV_ENDPOINT_OVERRIDES.webUrl] || production.webUrl,
+  };
+}

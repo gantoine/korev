@@ -1,18 +1,26 @@
 import { useState } from 'react';
-import { Avatar, Button, Card, Tabs } from '../design-system';
+import { version } from '../../package.json';
+import { Avatar, Button, Card, Tabs, Toast } from '../design-system';
 import type { AuthState, Connection, ConnectionMethod } from '../shared/auth';
 import type { InboxSnapshot } from '../shared/inbox';
 import type { Settings, ThemePreference } from '../shared/settings';
 import { korev } from './bridge';
 import { pluralize } from './format';
-import { AddRepoInput } from './repos/AddRepoInput';
-import { RepoChecklist } from './repos/RepoChecklist';
+import { RepoPicker } from './repos/RepoPicker';
 import { uniqueRepos } from './repos/repo-name';
-import { useSuggestedRepos } from './repos/useSuggestedRepos';
+import { TokenForm } from './setup/TokenForm';
 import { disconnect } from './useAuthState';
 import { saveRepos, saveTheme } from './useSettings';
+import { useTimedToast } from './useTimedToast';
 
 const GITHUB_APPLICATIONS_URL = 'https://github.com/settings/applications';
+
+const REPO_TOAST_MS = 5000;
+
+interface RepoToast {
+  message: string;
+  restore: string[] | null;
+}
 
 const METHOD_LABELS: Record<ConnectionMethod, string> = {
   oauth: 'Connected with GitHub',
@@ -66,30 +74,72 @@ function AccountCard({ connection, authLost }: AccountCardProps) {
           again.
         </p>
       ) : null}
+      <div className="mt-4">
+        <TokenForm />
+      </div>
     </Card>
   );
 }
 
-function RepositoriesCard({ repos }: { repos: string[] }) {
-  const suggested = useSuggestedRepos();
-  const [unwatched, setUnwatched] = useState<string[]>([]);
-  const listed = uniqueRepos(repos, unwatched, suggested);
+interface RepoToastViewProps {
+  toast: RepoToast;
+  onUndo: (repos: string[]) => void;
+  onClose: () => void;
+}
 
-  function toggle(repo: string, checked: boolean) {
-    if (checked) {
-      void saveRepos(uniqueRepos(repos, [repo]));
-      return;
-    }
+function RepoToastView({ toast, onUndo, onClose }: RepoToastViewProps) {
+  const { restore } = toast;
+  return (
+    <div className="fixed right-5 bottom-5 z-50">
+      <Toast
+        title={toast.message}
+        onClose={onClose}
+        action={
+          restore ? (
+            <Button size="sm" onClick={() => onUndo(restore)}>
+              Undo
+            </Button>
+          ) : undefined
+        }
+      />
+    </div>
+  );
+}
+
+function RepositoriesCard({ repos }: { repos: string[] }) {
+  const [unwatched, setUnwatched] = useState<string[]>([]);
+  const { toast, show, dismiss } = useTimedToast<RepoToast>(REPO_TOAST_MS);
+
+  function watch(repo: string) {
+    void saveRepos(uniqueRepos(repos, [repo]));
+    show({ message: `Watching ${repo}`, restore: null });
+  }
+
+  function unwatch(repo: string) {
     setUnwatched((current) => uniqueRepos(current, [repo]));
     void saveRepos(repos.filter((watched) => watched !== repo));
+    show({ message: `Stopped watching ${repo}`, restore: repos });
+  }
+
+  function undo(restore: string[]) {
+    dismiss();
+    void saveRepos(restore);
   }
 
   return (
     <Card title={`Watching ${pluralize(repos.length, 'repo')}`}>
-      <div className="flex flex-col gap-4">
-        <RepoChecklist repos={listed} selected={repos} onToggle={toggle} />
-        <AddRepoInput onAdd={(repo) => toggle(repo, true)} />
-      </div>
+      <RepoPicker
+        pinned={{
+          title: 'Selected',
+          repos: uniqueRepos(repos, unwatched),
+          emptyMessage: 'No repos selected yet.',
+        }}
+        selected={repos}
+        onToggle={(repo, checked) => (checked ? watch(repo) : unwatch(repo))}
+      />
+      {toast ? (
+        <RepoToastView toast={toast} onUndo={undo} onClose={dismiss} />
+      ) : null}
     </Card>
   );
 }
@@ -111,7 +161,7 @@ function AboutCard({ stacksUnavailable }: { stacksUnavailable: boolean }) {
     <Card title="About">
       <div className="type-h3 text-fg-1">Korev</div>
       <p className="mt-1 mb-0 text-xs text-fg-3">
-        Your PRs, sorted by what needs you.
+        Version {version} · Your PRs, sorted by what needs you.
       </p>
       {stacksUnavailable ? (
         <p className="mt-3 mb-0 text-xs text-warning-text">

@@ -7,6 +7,7 @@ import type {
   ReviewRequest,
 } from '../shared/inbox';
 import type { PullRequest, StackLayer } from '../shared/pull-request';
+import type { RepoOwner, RepoPage } from '../shared/repos';
 import { DEFAULT_SETTINGS, type Settings } from '../shared/settings';
 
 export const SYNCED_AT = '2026-10-03T14:02:00.000Z';
@@ -295,3 +296,26 @@ export const WATCHING_SETTINGS: Settings = {
   ...DEFAULT_SETTINGS,
   repos: ['acme/api', 'acme/web'],
 };
+
+export function makeOwner(
+  login: string,
+  overrides: Partial<RepoOwner> = {},
+): RepoOwner {
+  return { login, kind: 'org', access: 'ok', actionUrl: null, ...overrides };
+}
+
+export function makeRepoPage(
+  owner: string,
+  repos: string[],
+  overrides: Partial<RepoPage> = {},
+): RepoPage {
+  return {
+    owner,
+    repos,
+    totalCount: repos.length,
+    nextCursor: null,
+    access: 'ok',
+    actionUrl: null,
+    ...overrides,
+  };
+}

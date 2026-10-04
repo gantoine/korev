@@ -31,6 +31,7 @@ function inboxResult(
     reviews: [],
     truncated: { mine: false, reviews: false },
     problems: [],
+    renamedRepos: [],
     stacksUnavailable: false,
   };
 }
@@ -86,6 +87,11 @@ function setup() {
     },
     token: () => session.token,
     repos: () => session.repos,
+    renameRepos: async (renames) => {
+      session.repos = session.repos.map(
+        (repo) => renames.find((rename) => rename.from === repo)?.to ?? repo,
+      );
+    },
     now: () => new Date(),
     scheduler: {
       setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
@@ -365,5 +371,19 @@ describe('inbox poller', () => {
     expect(builds.map((input) => input.unknownMergeStreaks.PR_9)).toEqual([
       1, 2, 3, 1,
     ]);
+  });
+
+  it('saves a renamed repo and syncs again with the new name', async () => {
+    const { poller, client, session, syncCount } = setup();
+    client.fetchInbox.mockResolvedValueOnce({
+      ...inboxResult(),
+      renamedRepos: [{ from: 'acme/api', to: 'acme/api-v2' }],
+    });
+
+    await poller.start();
+
+    expect(session.repos).toEqual(['acme/api-v2']);
+    expect(syncCount()).toBe(2);
+    expect(client.fetchInbox.mock.calls[1][1]).toEqual(['acme/api-v2']);
   });
 });

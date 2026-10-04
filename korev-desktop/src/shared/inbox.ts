@@ -118,9 +118,18 @@ export type SyncStatus =
   | 'auth_lost'
   | 'error';
 
+export type ProblemKind =
+  | 'restricted'
+  | 'sso'
+  | 'not_found'
+  | 'archived'
+  | 'other';
+
 export interface Problem {
+  kind: ProblemKind;
   repo: string | null;
   message: string;
+  actionUrl: string | null;
 }
 
 export interface InboxSnapshot {
