@@ -1,13 +1,70 @@
 import { describe, expect, it } from 'vitest';
 import type { Reviewer, StackInfo } from '../shared/pull-request';
-import { buildInbox } from './build-inbox';
+import { buildInbox, type InboxInput } from './build-inbox';
 import { NOW, daysAgo, makeLayer, makePr } from './test-fixtures';
 
-const viewer = { login: 'alice', teams: [] };
+const viewer = {
+  login: 'alice',
+  teams: [{ org: 'acme', slug: 'web', members: ['alice', 'bob'] }],
+};
 const alice: Reviewer = { kind: 'user', login: 'alice' };
+const webTeam: Reviewer = { kind: 'team', org: 'acme', slug: 'web' };
+
+function build(input: Partial<InboxInput>) {
+  return buildInbox({
+    mine: [],
+    reviews: [],
+    viewer,
+    now: NOW,
+    unknownMergeStreaks: {},
+    repoOrder: [],
+    ...input,
+  });
+}
+
+function requestedFrom(reviewer: Reviewer) {
+  return {
+    authorLogin: 'carol',
+    pendingReviewers: [reviewer],
+    reviewRequestEvents: [{ reviewer, createdAt: daysAgo(2) }],
+  };
+}
 
 describe('buildInbox', () => {
-  it('buckets my PRs and counts only PRs requested from me', () => {
+  it('groups by repo in the chosen order, with unknown repos last alphabetically', () => {
+    const inbox = build({
+      mine: [
+        makePr({ number: 1, repo: 'acme/zeta' }),
+        makePr({ number: 2, repo: 'acme/web' }),
+        makePr({ number: 3, repo: 'acme/alpha' }),
+        makePr({ number: 4, repo: 'acme/api' }),
+      ],
+      repoOrder: ['acme/web', 'acme/api'],
+    });
+
+    expect(inbox.mine.map((group) => group.repo)).toEqual([
+      'acme/web',
+      'acme/api',
+      'acme/alpha',
+      'acme/zeta',
+    ]);
+  });
+
+  it('buckets my PRs inside each repo', () => {
+    const inbox = build({
+      mine: [
+        makePr({ number: 10, reviewDecision: 'CHANGES_REQUESTED' }),
+        makePr({ number: 11 }),
+      ],
+    });
+
+    expect(inbox.mine).toHaveLength(1);
+    expect(inbox.mine[0].sections.map((section) => section.count)).toEqual([
+      1, 0, 1,
+    ]);
+  });
+
+  it('keeps stacks whole and counts only reviews still waiting on the viewer', () => {
     const layers = [1, 2, 3].map((position) =>
       makeLayer({ position, number: 300 + position }),
     );
@@ -18,32 +75,25 @@ describe('buildInbox', () => {
       position,
       layers,
     });
-    const requested = (number: number, position: number) =>
-      makePr({
-        number,
-        authorLogin: 'bob',
-        stack: stackAt(position),
-        pendingReviewers: [alice],
-        reviewRequestEvents: [{ reviewer: alice, createdAt: daysAgo(2) }],
-      });
-
-    const inbox = buildInbox({
-      mine: [
-        makePr({ number: 10, reviewDecision: 'CHANGES_REQUESTED' }),
-        makePr({ number: 11 }),
+    const inbox = build({
+      reviews: [
+        makePr({ number: 301, stack: stackAt(1), ...requestedFrom(alice) }),
+        makePr({ number: 303, stack: stackAt(3), ...requestedFrom(alice) }),
+        makePr({
+          number: 40,
+          ...requestedFrom(webTeam),
+          reviews: [{ login: 'bob', state: 'APPROVED', isBot: false }],
+        }),
       ],
-      reviews: [requested(301, 1), requested(303, 3)],
-      viewer,
-      now: NOW,
-      unknownMergeStreaks: {},
     });
 
-    expect(inbox.mine.map((section) => section.count)).toEqual([1, 0, 1]);
     expect(inbox.reviewCount).toBe(2);
     expect(inbox.reviews).toHaveLength(1);
-    expect(inbox.reviews[0]).toMatchObject({
-      kind: 'stack',
-      stack: { requestedCount: 2, size: 3 },
-    });
+    expect(inbox.reviews[0].entries).toMatchObject([
+      { kind: 'stack', stack: { requestedCount: 2, size: 3 } },
+    ]);
+    expect(inbox.reviews[0].approved).toMatchObject([
+      { item: { pr: { number: 40 } }, approval: { kind: 'teammate' } },
+    ]);
   });
 });

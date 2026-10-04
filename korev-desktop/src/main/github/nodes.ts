@@ -44,7 +44,7 @@ export interface StackNode {
 }
 
 export interface LatestReviewNode {
-  author?: { login?: string } | null;
+  author?: { __typename?: string; login?: string } | null;
   state?: string;
 }
 

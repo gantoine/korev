@@ -53,6 +53,7 @@ export interface Viewer {
 export interface ViewerTeam {
   org: string;
   slug: string;
+  members: string[];
 }
 
 export interface InboxResult {
@@ -125,7 +126,10 @@ interface ViewerTeamsData {
   viewer: {
     organizations?: Connection<{
       login: string;
-      teams?: Connection<{ slug: string }>;
+      teams?: Connection<{
+        slug: string;
+        members?: Connection<{ login: string }>;
+      }>;
     }>;
   };
 }
@@ -544,6 +548,7 @@ function toViewerTeams(data: ViewerTeamsData): ViewerTeam[] {
     presentNodes(organization.teams).map((team) => ({
       org: organization.login,
       slug: team.slug,
+      members: presentNodes(team.members).map((member) => member.login),
     })),
   );
 }

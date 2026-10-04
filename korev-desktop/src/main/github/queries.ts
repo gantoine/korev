@@ -12,6 +12,7 @@ import {
   STACK_ENTRIES_LIMIT,
   SUGGESTED_REPOS_SEARCH_SIZE,
   TEAMS_LIMIT,
+  TEAM_MEMBERS_LIMIT,
   TIMELINE_EVENTS_LIMIT,
 } from './config';
 
@@ -161,7 +162,7 @@ fragment PrCore on PullRequest {
     }
   }
   latestReviews(first: ${LATEST_REVIEWS_LIMIT}) {
-    nodes { author { login } state }
+    nodes { author { __typename login } state }
   }
   ${includeStacks ? STACK_FIELDS : ''}
 }`;
@@ -244,7 +245,12 @@ query ViewerTeams($login: String!) {
     organizations(first: ${ORGANIZATIONS_LIMIT}) {
       nodes {
         login
-        teams(first: ${TEAMS_LIMIT}, userLogins: [$login]) { nodes { slug } }
+        teams(first: ${TEAMS_LIMIT}, userLogins: [$login]) {
+          nodes {
+            slug
+            members(first: ${TEAM_MEMBERS_LIMIT}) { nodes { login } }
+          }
+        }
       }
     }
   }

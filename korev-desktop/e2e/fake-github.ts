@@ -6,9 +6,11 @@ import {
 import type { AddressInfo } from 'node:net';
 
 export const VIEWER_LOGIN = 'maria';
-export const WATCHED_REPO = 'acme/api';
+export const API_REPO = 'acme/api';
+export const WEB_REPO = 'acme/web';
 export const FAILING_PR_TITLE = 'Rate-limit per tenant on ingestion endpoints';
 export const NEW_PR_TITLE = 'Bump OpenTelemetry to 1.31';
+export const WEB_PR_TITLE = 'Settings: org access states';
 
 const GRANTED_SCOPES = 'repo, read:org';
 const POLL_INTERVAL_SECONDS = '1';
@@ -23,6 +25,7 @@ interface GraphqlRequest {
 }
 
 interface PrSpec {
+  repo: string;
   number: number;
   title: string;
   mergeStateStatus: string;
@@ -31,6 +34,7 @@ interface PrSpec {
 }
 
 const FAILING_PR: PrSpec = {
+  repo: API_REPO,
   number: 491,
   title: FAILING_PR_TITLE,
   mergeStateStatus: 'BLOCKED',
@@ -39,8 +43,18 @@ const FAILING_PR: PrSpec = {
 };
 
 const NEW_PR: PrSpec = {
+  repo: API_REPO,
   number: 480,
   title: NEW_PR_TITLE,
+  mergeStateStatus: 'CLEAN',
+  rollup: 'SUCCESS',
+  conclusion: 'SUCCESS',
+};
+
+const WEB_PR: PrSpec = {
+  repo: WEB_REPO,
+  number: 304,
+  title: WEB_PR_TITLE,
   mergeStateStatus: 'CLEAN',
   rollup: 'SUCCESS',
   conclusion: 'SUCCESS',
@@ -51,12 +65,12 @@ function prNode(spec: PrSpec) {
     id: `PR_${spec.number}`,
     number: spec.number,
     title: spec.title,
-    url: `https://github.com/${WATCHED_REPO}/pull/${spec.number}`,
+    url: `https://github.com/${spec.repo}/pull/${spec.number}`,
     state: 'OPEN',
     isDraft: false,
     createdAt: '2026-10-01T10:00:00Z',
     updatedAt: '2026-10-03T10:00:00Z',
-    repository: { nameWithOwner: WATCHED_REPO },
+    repository: { nameWithOwner: spec.repo },
     author: { login: VIEWER_LOGIN, avatarUrl: null },
     reviewDecision: null,
     mergeable: 'MERGEABLE',
@@ -106,11 +120,13 @@ function accessAliases(request: GraphqlRequest) {
 }
 
 function suggestedRepos(request: GraphqlRequest) {
-  const node = { repository: { nameWithOwner: WATCHED_REPO } };
+  const nodes = [API_REPO, WEB_REPO].map((nameWithOwner) => ({
+    repository: { nameWithOwner },
+  }));
   return Object.fromEntries(
     [...request.query.matchAll(SEARCH_ALIAS)].map(([, alias]) => [
       alias,
-      { nodes: [node] },
+      { nodes },
     ]),
   );
 }
@@ -139,7 +155,7 @@ export interface FakeGithub {
 }
 
 export async function startFakeGithub(): Promise<FakeGithub> {
-  const myPrs: PrSpec[] = [FAILING_PR];
+  const myPrs: PrSpec[] = [FAILING_PR, WEB_PR];
   let pendingThreadAt: string | null = null;
   let inboxGate: Promise<void> = Promise.resolve();
   let openInboxGate = () => undefined as void;
@@ -168,7 +184,7 @@ export async function startFakeGithub(): Promise<FakeGithub> {
     const threads = pendingThreadAt
       ? [
           {
-            repository: { full_name: WATCHED_REPO },
+            repository: { full_name: API_REPO },
             subject: { type: 'PullRequest' },
             updated_at: pendingThreadAt,
           },

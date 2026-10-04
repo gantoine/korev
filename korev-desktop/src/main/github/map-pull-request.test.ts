@@ -72,7 +72,7 @@ describe('toPullRequest', () => {
     expect(pr.filesTruncated).toBe(false);
   });
 
-  it('maps checks and the latest review per reviewer on a review request', () => {
+  it('maps checks and the latest review per reviewer, marking bots', () => {
     const pr = toPullRequest(teamRequestNode);
 
     expect(pr.checks).toEqual([
@@ -80,8 +80,9 @@ describe('toPullRequest', () => {
       { name: 'ci/build', outcome: 'passing' },
     ]);
     expect(pr.reviews).toEqual([
-      { login: 'pedro', state: 'APPROVED' },
-      { login: 'ana', state: 'CHANGES_REQUESTED' },
+      { login: 'pedro', state: 'APPROVED', isBot: false },
+      { login: 'ana', state: 'CHANGES_REQUESTED', isBot: false },
+      { login: 'stamphog', state: 'APPROVED', isBot: true },
     ]);
   });
 

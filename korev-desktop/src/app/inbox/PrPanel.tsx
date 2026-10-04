@@ -9,7 +9,7 @@ import {
   type SidePanelMode,
 } from '../../design-system';
 import { prSize } from '../../inbox/size';
-import type { MyPr, ReviewItem, SizeInfo } from '../../shared/inbox';
+import type { Approval, MyPr, ReviewItem, SizeInfo } from '../../shared/inbox';
 import type {
   Check,
   CheckOutcome,
@@ -28,6 +28,7 @@ import { subjectSummary, type PanelSubject } from './list-model';
 import { layerStateLabel } from './OtherLayerRow';
 import { authorHandle } from './PrRow';
 import { PriorityBadge } from './PriorityBadge';
+import { ApprovalBadge, approvalText } from './ReviewRow';
 
 const PANEL_LABEL = 'Pull request details';
 const OPEN_ON_GITHUB = 'Open on GitHub';
@@ -108,6 +109,17 @@ function ReasonsSection({ item }: { item: MyPr }) {
           </Badge>
         ))}
       </div>
+    </PanelSection>
+  );
+}
+
+function ApprovalSection({ approval }: { approval: Approval }) {
+  return (
+    <PanelSection title="Already approved">
+      <Line>
+        <ApprovalBadge approval={approval} />
+        {approvalText(approval)}
+      </Line>
     </PanelSection>
   );
 }
@@ -324,7 +336,13 @@ function SubjectDetails({ subject }: { subject: PanelSubject }) {
       <PullRequestDetails
         pr={pr}
         size={subject.item.size}
-        why={<PrioritySection item={subject.item} />}
+        why={
+          subject.approval ? (
+            <ApprovalSection approval={subject.approval} />
+          ) : (
+            <PrioritySection item={subject.item} />
+          )
+        }
       />
     );
   }

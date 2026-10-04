@@ -79,6 +79,10 @@ export function installFakeBridge({
       setRepos: vi.fn(async (repos: string[]) => ({ ...settings, repos })),
       setTheme: vi.fn(async (theme) => ({ ...settings, theme })),
       setLastView: vi.fn(async (lastView) => ({ ...settings, lastView })),
+      setCollapsedRepos: vi.fn(async (view, repos) => ({
+        ...settings,
+        collapsedRepos: { ...settings.collapsedRepos, [view]: repos },
+      })),
       suggestedRepos: vi.fn(async () => suggestedRepos),
       onChanged: vi.fn((listener) => {
         settingsListeners.add(listener);

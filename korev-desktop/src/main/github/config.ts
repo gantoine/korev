@@ -16,6 +16,7 @@ export const REVIEW_REQUESTS_LIMIT = 30;
 export const LATEST_REVIEWS_LIMIT = 30;
 export const ORGANIZATIONS_LIMIT = 100;
 export const TEAMS_LIMIT = 100;
+export const TEAM_MEMBERS_LIMIT = 100;
 export const SUGGESTED_REPOS_SEARCH_SIZE = 100;
 export const NOTIFICATIONS_PAGE_SIZE = 50;
 export const NOTIFICATIONS_PAGE_CAP = 5;

@@ -27,9 +27,7 @@ export function StackGroup({
     >
       <div className="flex min-w-0 items-center gap-2 border-b border-border-1 px-3 py-2 text-xs text-fg-2">
         <Badge tone="accent">Stack</Badge>
-        <span className="truncate font-mono">
-          {repo} → {baseRefName}
-        </span>
+        <span className="truncate font-mono">→ {baseRefName}</span>
         <span className="flex-1" />
         <span className="truncate">{summary}</span>
         {partial ? <Badge outline>partial view</Badge> : null}

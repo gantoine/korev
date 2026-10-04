@@ -32,6 +32,9 @@ import {
   type BannerItem,
   type SidebarNavItem,
 } from '../../design-system';
+import { RepoHeader } from '../inbox/RepoHeader';
+import { ApprovalBadge } from '../inbox/ReviewRow';
+import { ToggleRow } from '../inbox/ToggleRow';
 import { UnlockStep } from '../setup/UnlockStep';
 import { Row, Section } from './Section';
 import {
@@ -430,6 +433,48 @@ function SidePanelSample() {
   );
 }
 
+function RepoGroupSamples() {
+  const [expanded, setExpanded] = useState(true);
+  return (
+    <div className="rounded-md border border-border-1">
+      <RepoHeader
+        repo="acme/web"
+        countLabel="3 open"
+        urgentLabel="2 need you"
+        expanded={expanded}
+        onToggle={() => setExpanded((current) => !current)}
+      />
+      <RepoHeader
+        repo="acme/api"
+        countLabel="1 waiting"
+        urgentLabel="1 P1"
+        expanded={false}
+        onToggle={() => undefined}
+      />
+      <RepoHeader
+        repo="acme/billing"
+        countLabel="0 waiting"
+        urgentLabel={null}
+        expanded
+        onToggle={() => undefined}
+      />
+      <ToggleRow
+        optionKey="gallery-approved"
+        expanded={false}
+        onToggle={() => undefined}
+        className="pl-5"
+      >
+        Already approved
+        <span className="font-mono text-fg-2">2</span>
+      </ToggleRow>
+      <div className="flex gap-2 px-5 py-2">
+        <ApprovalBadge approval={{ kind: 'teammate', login: 'sakce' }} />
+        <ApprovalBadge approval={{ kind: 'bot', login: 'stamphog' }} />
+      </div>
+    </div>
+  );
+}
+
 export function InboxSection() {
   const [view, setView] = useState('review');
   return (
@@ -466,6 +511,7 @@ export function InboxSection() {
           action={<Button size="sm">Refresh</Button>}
         />
       </div>
+      <RepoGroupSamples />
       <BannerSamples />
       <SidePanelSample />
       <div className="w-105 rounded-lg border border-border-2 bg-surface p-7">

@@ -34,3 +34,27 @@ describe('SettingsPage', () => {
     expect(screen.queryByText('Stopped watching acme/api')).toBeNull();
   });
 });
+
+describe('Inbox order', () => {
+  it('moves a repo up with ⌥↑, saves the order and announces the move', () => {
+    const { bridge } = installFakeBridge();
+    render(
+      <SettingsPage
+        auth={CONNECTED_AUTH}
+        settings={WATCHING_SETTINGS}
+        snapshot={makeSnapshot()}
+      />,
+    );
+
+    const handle = screen.getByRole('button', {
+      name: 'Reorder acme/web, 2 of 2',
+    });
+    fireEvent.keyDown(handle, { key: 'ArrowUp', altKey: true });
+
+    expect(bridge.settings.setRepos).toHaveBeenLastCalledWith([
+      'acme/web',
+      'acme/api',
+    ]);
+    expect(screen.getByText('Moved acme/web to 1 of 2')).toBeTruthy();
+  });
+});

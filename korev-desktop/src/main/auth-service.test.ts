@@ -49,7 +49,7 @@ function setup(scopes: string[] = FULL_SCOPES, cipher = plainCipher) {
     fetchViewer: vi.fn(async () => viewer),
     createDeviceFlow: idleDeviceFlow,
     onStateChange: vi.fn(),
-    onConnectionChange: vi.fn(),
+    onConnectionChange: vi.fn(async () => undefined),
     warn: vi.fn(),
   };
   return { deps, fs, tokenStore, service: createAuthService(deps) };

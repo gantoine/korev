@@ -36,12 +36,16 @@ const teamsResponse: CannedResponse = {
   body: { data: { viewer: { organizations: { nodes: [] } } } },
 };
 
-function inboxResponse(nameWithOwner: string): CannedResponse {
+function inboxResponse(...names: string[]): CannedResponse {
+  const access = names.map((nameWithOwner, index) => [
+    `repo${index}`,
+    { nameWithOwner, viewerPermission: 'WRITE', isArchived: false },
+  ]);
   return {
     body: {
       data: {
         viewer: VIEWER,
-        repo0: { nameWithOwner, viewerPermission: 'WRITE', isArchived: false },
+        ...Object.fromEntries(access),
         mine: EMPTY_SEARCH,
         reviews: EMPTY_SEARCH,
       },
@@ -62,8 +66,9 @@ function previousSession(): Record<string, string> {
     viewerLogin: VIEWER.login,
     reviews: [
       {
-        kind: 'pr',
-        item: { pr: { title: CACHED_PR_TITLE } },
+        repo: 'acme/api',
+        entries: [{ kind: 'pr', item: { pr: { title: CACHED_PR_TITLE } } }],
+        approved: [],
       },
     ],
   };
@@ -75,7 +80,7 @@ function previousSession(): Record<string, string> {
       login: VIEWER.login,
       avatarUrl: null,
     }),
-    [`${USER_DATA}/inbox-cache.bin`]: JSON.stringify({ version: 1, snapshot }),
+    [`${USER_DATA}/inbox-cache.bin`]: JSON.stringify({ version: 2, snapshot }),
   };
 }
 
@@ -107,7 +112,7 @@ function setup(
       .filter(([channel]) => channel === IpcChannel.SettingsChanged)
       .map(([, settings]) => settings);
   running = korev;
-  return { korev, fs, invoke, settingsBroadcasts };
+  return { korev, fs, fake, invoke, settingsBroadcasts };
 }
 
 afterEach(() => {
@@ -127,25 +132,50 @@ describe('korev', () => {
     ]);
   });
 
-  it('saves and broadcasts the new name when a selected repo was renamed', async () => {
+  it('saves the new name of a renamed repo in the same position', async () => {
     const { korev, invoke, settingsBroadcasts } = setup([
       viewerResponse,
-      inboxResponse('acme/api-v2'),
+      inboxResponse('acme/web', 'acme/api-v2'),
       teamsResponse,
-      inboxResponse('acme/api-v2'),
+      inboxResponse('acme/web', 'acme/api-v2'),
     ]);
     await korev.start();
     await invoke(IpcChannel.AuthUseToken, 'ghp_token');
 
-    await invoke(IpcChannel.SettingsSetRepos, ['acme/api']);
+    await invoke(IpcChannel.SettingsSetRepos, ['acme/web', 'acme/api']);
 
     await vi.waitFor(() =>
-      expect(korev.settings.current().repos).toEqual(['acme/api-v2']),
+      expect(korev.settings.current().repos).toEqual([
+        'acme/web',
+        'acme/api-v2',
+      ]),
     );
     expect(settingsBroadcasts().map((settings) => settings.repos)).toEqual([
-      ['acme/api'],
-      ['acme/api-v2'],
+      ['acme/web', 'acme/api'],
+      ['acme/web', 'acme/api-v2'],
     ]);
+  });
+
+  it('reorders repos without asking GitHub again', async () => {
+    const { korev, fake, invoke } = setup([
+      viewerResponse,
+      inboxResponse('acme/api', 'acme/web'),
+      teamsResponse,
+    ]);
+    await korev.start();
+    await invoke(IpcChannel.AuthUseToken, 'ghp_token');
+    await invoke(IpcChannel.SettingsSetRepos, ['acme/api', 'acme/web']);
+    await vi.waitFor(() =>
+      expect(korev.handlers[IpcChannel.InboxLoad]?.()).toMatchObject({
+        status: 'live',
+      }),
+    );
+    const requestsBefore = fake.requests.length;
+
+    await invoke(IpcChannel.SettingsSetRepos, ['acme/web', 'acme/api']);
+
+    expect(fake.requests).toHaveLength(requestsBefore);
+    expect(korev.settings.current().repos).toEqual(['acme/web', 'acme/api']);
   });
 
   it('shows the cached inbox from the last session while the first sync runs', async () => {
@@ -159,7 +189,7 @@ describe('korev', () => {
     expect(await invoke(IpcChannel.InboxLoad)).toMatchObject({
       status: 'syncing',
       fromCache: true,
-      reviews: [{ item: { pr: { title: CACHED_PR_TITLE } } }],
+      reviews: [{ entries: [{ item: { pr: { title: CACHED_PR_TITLE } } }] }],
     });
   });
 
@@ -169,8 +199,6 @@ describe('korev', () => {
 
     await invoke(IpcChannel.AuthDisconnect);
 
-    await vi.waitFor(() =>
-      expect(fs.files.has(`${USER_DATA}/inbox-cache.bin`)).toBe(false),
-    );
+    expect(fs.files.has(`${USER_DATA}/inbox-cache.bin`)).toBe(false);
   });
 });

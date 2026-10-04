@@ -8,6 +8,7 @@ import type {
 export interface ViewerTeam {
   org: string;
   slug: string;
+  members: string[];
 }
 
 export interface Viewer {
@@ -15,7 +16,7 @@ export interface Viewer {
   teams: ViewerTeam[];
 }
 
-function sameName(a: string, b: string): boolean {
+export function sameName(a: string, b: string): boolean {
   return a.toLowerCase() === b.toLowerCase();
 }
 
@@ -32,12 +33,21 @@ function isViewer(reviewer: Reviewer, viewer: Viewer): boolean {
     return viewer.login !== null && sameName(reviewer.login, viewer.login);
   }
   return viewer.teams.some((team) =>
-    sameReviewer(reviewer, { kind: 'team', ...team }),
+    sameReviewer(reviewer, { kind: 'team', org: team.org, slug: team.slug }),
   );
 }
 
 function isPending(reviewer: Reviewer, pr: PullRequest): boolean {
   return pr.pendingReviewers.some((pending) => sameReviewer(pending, reviewer));
+}
+
+export function requestingViewerTeams(
+  pr: PullRequest,
+  viewer: Viewer,
+): ViewerTeam[] {
+  return viewer.teams.filter((team) =>
+    isPending({ kind: 'team', org: team.org, slug: team.slug }, pr),
+  );
 }
 
 function teamHandle(reviewer: Reviewer): string | null {

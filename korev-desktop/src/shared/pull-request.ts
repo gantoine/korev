@@ -41,6 +41,7 @@ export type ReviewState =
 export interface SubmittedReview {
   login: string;
   state: ReviewState;
+  isBot: boolean;
 }
 
 export type Reviewer =

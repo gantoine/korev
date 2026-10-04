@@ -1,10 +1,13 @@
 import type { AuthState } from '../shared/auth';
 import type {
+  ApprovedReview,
   InboxSnapshot,
   MyPr,
+  MyStack,
   Priority,
   ReviewItem,
   ReviewRequest,
+  ReviewStack,
 } from '../shared/inbox';
 import type { PullRequest, StackLayer } from '../shared/pull-request';
 import type { RepoOwner, RepoPage } from '../shared/repos';
@@ -188,6 +191,67 @@ export const SPIKE_REVIEW = review(
   },
 );
 
+const WEB_STACK: MyStack = {
+  id: 'STACK_web',
+  repo: 'acme/web',
+  baseRefName: 'main',
+  size: 4,
+  openCount: 3,
+  partial: false,
+  bucket: 'needs-you',
+  headline: 'Needs you: #304 lint failing',
+  layers: [
+    { kind: 'mine', position: 4, item: PICKER_PR },
+    { kind: 'mine', position: 3, item: LINT_PR },
+    {
+      kind: 'other',
+      position: 2,
+      layer: layer(2, 303, 'IPC bridge and token store', {
+        authorLogin: 'alex',
+      }),
+    },
+    {
+      kind: 'other',
+      position: 1,
+      layer: layer(1, 302, 'App shell', { state: 'MERGED' }),
+    },
+  ],
+};
+
+const ENGINE_STACK: ReviewStack = {
+  id: 'STACK_engine',
+  repo: 'acme/web',
+  baseRefName: 'main',
+  size: 4,
+  requestedCount: 2,
+  partial: false,
+  layers: [
+    {
+      kind: 'other',
+      position: 1,
+      layer: layer(1, 297, 'Query engine: types', { state: 'MERGED' }),
+    },
+    { kind: 'requested', position: 2, item: PLANNER_REVIEW },
+    { kind: 'requested', position: 3, item: DASHBOARDS_REVIEW },
+    {
+      kind: 'other',
+      position: 4,
+      layer: layer(4, 300, 'Query engine: cleanup'),
+    },
+  ],
+};
+
+export const APPROVED_REVIEW: ApprovedReview = {
+  item: review(
+    makePr(312, 'Cache warehouse schemas', {
+      repo: 'acme/web',
+      authorLogin: 'li',
+    }),
+    { request: { ...DIRECT_REQUEST, direct: false, team: '@acme/frontend' } },
+  ),
+  approval: { kind: 'teammate', login: 'sakce' },
+};
+
 export function makeSnapshot(
   overrides: Partial<InboxSnapshot> = {},
 ): InboxSnapshot {
@@ -199,76 +263,54 @@ export function makeSnapshot(
     repoCount: 4,
     mine: [
       {
-        bucket: 'needs-you',
-        count: 2,
-        entries: [
-          { kind: 'pr', item: RATE_LIMIT_PR },
+        repo: 'acme/api',
+        sections: [
           {
-            kind: 'stack',
-            stack: {
-              id: 'STACK_web',
-              repo: 'acme/web',
-              baseRefName: 'main',
-              size: 4,
-              openCount: 3,
-              partial: false,
-              bucket: 'needs-you',
-              headline: 'Needs you: #304 lint failing',
-              layers: [
-                { kind: 'mine', position: 4, item: PICKER_PR },
-                { kind: 'mine', position: 3, item: LINT_PR },
-                {
-                  kind: 'other',
-                  position: 2,
-                  layer: layer(2, 303, 'IPC bridge and token store', {
-                    authorLogin: 'alex',
-                  }),
-                },
-                {
-                  kind: 'other',
-                  position: 1,
-                  layer: layer(1, 302, 'App shell', { state: 'MERGED' }),
-                },
-              ],
-            },
+            bucket: 'needs-you',
+            count: 1,
+            entries: [{ kind: 'pr', item: RATE_LIMIT_PR }],
+          },
+          {
+            bucket: 'in-progress',
+            count: 1,
+            entries: [{ kind: 'pr', item: EXPORTER_PR }],
+          },
+          {
+            bucket: 'ready',
+            count: 1,
+            entries: [{ kind: 'pr', item: OTEL_PR }],
           },
         ],
       },
       {
-        bucket: 'in-progress',
-        count: 1,
-        entries: [{ kind: 'pr', item: EXPORTER_PR }],
+        repo: 'acme/web',
+        sections: [
+          {
+            bucket: 'needs-you',
+            count: 2,
+            entries: [{ kind: 'stack', stack: WEB_STACK }],
+          },
+          { bucket: 'in-progress', count: 0, entries: [] },
+          { bucket: 'ready', count: 0, entries: [] },
+        ],
       },
-      { bucket: 'ready', count: 1, entries: [{ kind: 'pr', item: OTEL_PR }] },
     ],
     reviews: [
-      { kind: 'pr', item: INVOICE_REVIEW },
       {
-        kind: 'stack',
-        stack: {
-          id: 'STACK_engine',
-          repo: 'acme/web',
-          baseRefName: 'main',
-          size: 4,
-          requestedCount: 2,
-          partial: false,
-          layers: [
-            {
-              kind: 'other',
-              position: 1,
-              layer: layer(1, 297, 'Query engine: types', { state: 'MERGED' }),
-            },
-            { kind: 'requested', position: 2, item: PLANNER_REVIEW },
-            { kind: 'requested', position: 3, item: DASHBOARDS_REVIEW },
-            {
-              kind: 'other',
-              position: 4,
-              layer: layer(4, 300, 'Query engine: cleanup'),
-            },
-          ],
-        },
+        repo: 'acme/api',
+        entries: [{ kind: 'pr', item: SPIKE_REVIEW }],
+        approved: [],
       },
-      { kind: 'pr', item: SPIKE_REVIEW },
+      {
+        repo: 'acme/web',
+        entries: [{ kind: 'stack', stack: ENGINE_STACK }],
+        approved: [],
+      },
+      {
+        repo: 'acme/billing',
+        entries: [{ kind: 'pr', item: INVOICE_REVIEW }],
+        approved: [],
+      },
     ],
     reviewCount: 4,
     problems: [],

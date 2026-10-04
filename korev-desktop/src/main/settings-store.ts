@@ -1,5 +1,6 @@
 import {
   DEFAULT_SETTINGS,
+  type CollapsedRepos,
   type InboxView,
   type Settings,
   type ThemePreference,
@@ -28,6 +29,14 @@ function pickRepos(value: unknown): string[] {
   return [...new Set(value.filter(isRepoName))];
 }
 
+function pickCollapsedRepos(value: unknown): CollapsedRepos {
+  const raw = (value ?? {}) as Partial<Record<InboxView, unknown>>;
+  return {
+    review: pickRepos(raw.review),
+    mine: pickRepos(raw.mine),
+  };
+}
+
 function pickOneOf<T>(options: readonly T[], value: unknown, fallback: T): T {
   return options.includes(value as T) ? (value as T) : fallback;
 }
@@ -49,6 +58,7 @@ function sanitize(raw: Record<string, unknown>): Settings {
     theme: pickOneOf(THEMES, raw.theme, DEFAULT_SETTINGS.theme),
     lastView: pickOneOf(VIEWS, raw.lastView, DEFAULT_SETTINGS.lastView),
     windowBounds: pickBounds(raw.windowBounds),
+    collapsedRepos: pickCollapsedRepos(raw.collapsedRepos),
   };
 }
 

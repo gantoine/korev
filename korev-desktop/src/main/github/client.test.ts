@@ -68,7 +68,19 @@ const teamsResponse: CannedResponse = {
     data: {
       viewer: {
         organizations: {
-          nodes: [{ login: 'acme', teams: { nodes: [{ slug: 'backend' }] } }],
+          nodes: [
+            {
+              login: 'acme',
+              teams: {
+                nodes: [
+                  {
+                    slug: 'backend',
+                    members: { nodes: [{ login: 'maria' }, { login: 'li' }] },
+                  },
+                ],
+              },
+            },
+          ],
         },
       },
     },
@@ -176,7 +188,9 @@ describe('createGithubClient', () => {
       expect(queryOf(fake, 1)).not.toContain('repository(');
       expect(inbox.mine.map((item) => item.number)).toEqual([1, 2]);
       expect(inbox.reviews.map((item) => item.number)).toEqual([530]);
-      expect(inbox.viewerTeams).toEqual([{ org: 'acme', slug: 'backend' }]);
+      expect(inbox.viewerTeams).toEqual([
+        { org: 'acme', slug: 'backend', members: ['maria', 'li'] },
+      ]);
       expect(inbox.truncated).toEqual({ mine: false, reviews: false });
     });
 
@@ -463,7 +477,9 @@ describe('createGithubClient', () => {
       client.clearSessionCache();
       await client.fetchInbox(TOKEN, ['acme/api']);
 
-      expect(cached.viewerTeams).toEqual([{ org: 'acme', slug: 'backend' }]);
+      expect(cached.viewerTeams).toEqual([
+        { org: 'acme', slug: 'backend', members: ['maria', 'li'] },
+      ]);
       expect(fake.requests).toHaveLength(5);
     });
   });

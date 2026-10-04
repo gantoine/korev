@@ -1,27 +1,39 @@
 import { useState } from 'react';
-import { EmptyState, Icon, cn } from '../design-system';
+import { EmptyState, cn } from '../design-system';
 import type {
+  ApprovedReview,
   InboxSnapshot,
   ReviewEntry,
+  ReviewRepoGroup,
   ReviewStack,
   ReviewStackLayer,
 } from '../shared/inbox';
 import { formatSynced, joinMeta, pluralize } from './format';
-import { toggleKey } from './inbox/entries';
+import { approvedKey, approvedToggleKey, toggleKey } from './inbox/entries';
 import { REVIEW_GRID } from './inbox/grid';
 import { InboxList } from './inbox/InboxList';
-import { LoadError, LoadingList, SkeletonRows } from './inbox/InboxStates';
+import { LoadError, LoadingList, RepoSkeletons } from './inbox/InboxStates';
 import { REVIEW_MODEL } from './inbox/list-model';
-import { useListOption } from './inbox/listbox';
 import { OtherLayerRow } from './inbox/OtherLayerRow';
 import { inboxPhase } from './inbox/phase';
-import { ReviewRow } from './inbox/ReviewRow';
+import { RepoBlock } from './inbox/RepoHeader';
+import { ApprovedRow, ReviewRow } from './inbox/ReviewRow';
+import {
+  requestedInGroup,
+  requestedItems,
+  topPriorityCount,
+} from './inbox/selectors';
 import { StackGroup, StackLayerItem, byPosition } from './inbox/StackGroup';
+import { ToggleRow } from './inbox/ToggleRow';
+import {
+  useCollapsedRepos,
+  type CollapsedRepos,
+} from './inbox/useCollapsedRepos';
 import { NARROW_HIDDEN } from './layout';
 import { MINUTE_MS, useNow } from './useNow';
 
-const SKELETON_ROWS = 5;
 const LIST_LABEL = 'Review requests';
+const NO_REVIEWS = 'No reviews waiting on you.';
 
 type OtherLayer = Extract<ReviewStackLayer, { kind: 'other' }>;
 
@@ -57,32 +69,6 @@ function ReviewLayer({
   );
 }
 
-interface OtherLayersToggleProps {
-  stackId: string;
-  summary: string;
-  expanded: boolean;
-  onToggle: () => void;
-}
-
-function OtherLayersToggle({
-  stackId,
-  summary,
-  expanded,
-  onToggle,
-}: OtherLayersToggleProps) {
-  const option = useListOption(toggleKey(stackId), { onActivate: onToggle });
-  return (
-    <div
-      {...option}
-      aria-expanded={expanded}
-      className="flex w-full cursor-pointer items-center gap-1.5 py-2 pr-5 pl-20 text-left font-sans text-xs text-fg-3 hover:bg-hover hover:text-fg-1 aria-selected:bg-raised focus-visible:relative focus-visible:shadow-focus"
-    >
-      {summary}
-      <Icon name={expanded ? 'chevron-down' : 'chevron-right'} size={12} />
-    </div>
-  );
-}
-
 function ReviewStackGroup({ stack }: { stack: ReviewStack }) {
   const [expanded, setExpanded] = useState(false);
   const layers = byPosition(stack.layers);
@@ -98,12 +84,14 @@ function ReviewStackGroup({ stack }: { stack: ReviewStack }) {
       partial={stack.partial}
     >
       {others.length > 0 ? (
-        <OtherLayersToggle
-          stackId={stack.id}
-          summary={otherLayersSummary(others)}
+        <ToggleRow
+          optionKey={toggleKey(stack.id)}
           expanded={expanded}
           onToggle={() => setExpanded((current) => !current)}
-        />
+          className="pl-20"
+        >
+          {otherLayersSummary(others)}
+        </ToggleRow>
       ) : null}
       {visible.map((layer) => (
         <StackLayerItem key={layer.position}>
@@ -147,9 +135,86 @@ function NoReviews({ syncedAt }: { syncedAt: string | null }) {
   return (
     <EmptyState
       icon="inbox"
-      title="No reviews waiting on you."
+      title={NO_REVIEWS}
       description={syncedAt ? formatSynced(syncedAt, now) : undefined}
     />
+  );
+}
+
+function ApprovedSection({
+  repo,
+  approved,
+}: {
+  repo: string;
+  approved: ApprovedReview[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <>
+      <ToggleRow
+        optionKey={approvedToggleKey(repo)}
+        expanded={expanded}
+        onToggle={() => setExpanded((current) => !current)}
+        className="pl-5"
+      >
+        Already approved
+        <span className="font-mono text-fg-2">{approved.length}</span>
+      </ToggleRow>
+      {expanded
+        ? approved.map((review) => (
+            <ApprovedRow key={approvedKey(review.item.pr)} approved={review} />
+          ))
+        : null}
+    </>
+  );
+}
+
+function urgentLabel(group: ReviewRepoGroup): string | null {
+  const topPriority = topPriorityCount(requestedInGroup(group));
+  return topPriority > 0 ? `${topPriority} P1` : null;
+}
+
+interface ReviewRepoViewProps {
+  group: ReviewRepoGroup;
+  collapsed: CollapsedRepos;
+}
+
+function ReviewRepoView({ group, collapsed }: ReviewRepoViewProps) {
+  if (group.entries.length === 0 && group.approved.length === 0) return null;
+  return (
+    <RepoBlock
+      repo={group.repo}
+      countLabel={`${requestedInGroup(group).length} waiting`}
+      urgentLabel={urgentLabel(group)}
+      expanded={!collapsed.isCollapsed(group.repo)}
+      onToggle={() => collapsed.toggle(group.repo)}
+    >
+      {group.entries.map((entry) => (
+        <ReviewEntryView key={entryKey(entry)} entry={entry} />
+      ))}
+      {group.approved.length > 0 ? (
+        <ApprovedSection repo={group.repo} approved={group.approved} />
+      ) : null}
+    </RepoBlock>
+  );
+}
+
+function ReviewGroups({
+  snapshot,
+  collapsed,
+}: {
+  snapshot: InboxSnapshot;
+  collapsed: CollapsedRepos;
+}) {
+  return (
+    <>
+      {requestedItems(snapshot).length === 0 ? (
+        <p className="m-0 px-5 pt-4 pb-2 text-sm text-fg-2">{NO_REVIEWS}</p>
+      ) : null}
+      {snapshot.reviews.map((group) => (
+        <ReviewRepoView key={group.repo} group={group} collapsed={collapsed} />
+      ))}
+    </>
   );
 }
 
@@ -159,11 +224,12 @@ export interface ReviewInboxProps {
 }
 
 export function ReviewInbox({ snapshot, onOpenSettings }: ReviewInboxProps) {
+  const collapsed = useCollapsedRepos('review');
   const phase = inboxPhase(snapshot);
   if (phase.kind === 'loading') {
     return (
       <LoadingList>
-        <SkeletonRows count={SKELETON_ROWS} />
+        <RepoSkeletons />
       </LoadingList>
     );
   }
@@ -185,11 +251,9 @@ export function ReviewInbox({ snapshot, onOpenSettings }: ReviewInboxProps) {
       header={<ColumnHeader />}
       empty={<NoReviews syncedAt={phase.snapshot.syncedAt} />}
     >
-      {(displayed) =>
-        displayed.reviews.map((entry) => (
-          <ReviewEntryView key={entryKey(entry)} entry={entry} />
-        ))
-      }
+      {(displayed) => (
+        <ReviewGroups snapshot={displayed} collapsed={collapsed} />
+      )}
     </InboxList>
   );
 }

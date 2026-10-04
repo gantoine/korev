@@ -18,6 +18,7 @@ export enum IpcChannel {
   SettingsSetRepos = 'settings:set-repos',
   SettingsSetTheme = 'settings:set-theme',
   SettingsSetLastView = 'settings:set-last-view',
+  SettingsSetCollapsedRepos = 'settings:set-collapsed-repos',
   SettingsSuggestedRepos = 'settings:suggested-repos',
   SettingsChanged = 'settings:changed',
   ReposOwners = 'repos:owners',
@@ -56,6 +57,7 @@ export interface KorevBridge {
     setRepos(repos: string[]): Promise<Settings>;
     setTheme(theme: ThemePreference): Promise<Settings>;
     setLastView(view: InboxView): Promise<Settings>;
+    setCollapsedRepos(view: InboxView, repos: string[]): Promise<Settings>;
     suggestedRepos(): Promise<string[]>;
     onChanged(listener: (settings: Settings) => void): Unsubscribe;
   };

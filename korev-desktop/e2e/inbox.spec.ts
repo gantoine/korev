@@ -9,9 +9,12 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  API_REPO,
   FAILING_PR_TITLE,
   NEW_PR_TITLE,
   VIEWER_LOGIN,
+  WEB_PR_TITLE,
+  WEB_REPO,
   startFakeGithub,
   type FakeGithub,
 } from './fake-github';
@@ -51,6 +54,12 @@ async function connectAndOpenMyPrs(window: Page) {
 
   await window.getByRole('button', { name: /My PRs/ }).click();
   await expect(window.getByText(FAILING_PR_TITLE)).toBeVisible();
+}
+
+function repoHeaders(window: Page) {
+  return window.locator('[role="option"][aria-expanded]').filter({
+    hasText: /^acme\//,
+  });
 }
 
 async function withSession(
@@ -109,6 +118,38 @@ test('keeps the sign-in across a relaunch and shows the cached inbox before the 
       await expect(window.getByText(/Synced/)).toBeVisible();
     } finally {
       await relaunched.close();
+    }
+  });
+});
+
+test('groups PRs by repo in the order chosen in Settings, with keyboard collapse', async () => {
+  await withSession(async (github, userDataDir) => {
+    const app = await launch(github, userDataDir);
+    try {
+      const window = await appWindow(app);
+      await connectAndOpenMyPrs(window);
+      await expect(repoHeaders(window).first()).toContainText(API_REPO);
+
+      await window.getByRole('button', { name: 'Settings' }).click();
+      await window
+        .getByRole('button', { name: `Reorder ${API_REPO}, 1 of 2` })
+        .press('Alt+ArrowDown');
+      await window.getByRole('button', { name: /My PRs/ }).click();
+
+      await expect(repoHeaders(window).first()).toContainText(WEB_REPO);
+      await expect(repoHeaders(window).nth(1)).toContainText(API_REPO);
+
+      await window.keyboard.press('j');
+      await expect(repoHeaders(window).first()).toBeFocused();
+      await window.keyboard.press('ArrowLeft');
+      await expect(window.getByText(WEB_PR_TITLE)).toBeHidden();
+      await window.keyboard.press('ArrowRight');
+      await window.keyboard.press('j');
+      await expect(
+        window.getByRole('option', { name: new RegExp(WEB_PR_TITLE) }),
+      ).toBeFocused();
+    } finally {
+      await app.close();
     }
   });
 });

@@ -234,6 +234,7 @@
             "nodes": [
               {
                 "author": {
+                  "__typename": "User",
                   "login": "pedro"
                 },
                 "state": "COMMENTED"
@@ -244,13 +245,22 @@
               },
               {
                 "author": {
+                  "__typename": "User",
                   "login": "ana"
                 },
                 "state": "CHANGES_REQUESTED"
               },
               {
                 "author": {
+                  "__typename": "User",
                   "login": "pedro"
+                },
+                "state": "APPROVED"
+              },
+              {
+                "author": {
+                  "__typename": "Bot",
+                  "login": "stamphog"
                 },
                 "state": "APPROVED"
               }

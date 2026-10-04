@@ -1,19 +1,26 @@
 import { useId } from 'react';
-import { EmptyState, Skeleton } from '../design-system';
+import { EmptyState } from '../design-system';
 import type {
   Bucket,
   InboxSnapshot,
   MyEntry,
+  MyRepoGroup,
   MySection,
   MyStack,
 } from '../shared/inbox';
 import { InboxList } from './inbox/InboxList';
-import { LoadError, LoadingList, SkeletonRows } from './inbox/InboxStates';
+import { LoadError, LoadingList, RepoSkeletons } from './inbox/InboxStates';
 import { MINE_MODEL } from './inbox/list-model';
 import { MyPrRow } from './inbox/MyPrRow';
 import { OtherLayerRow } from './inbox/OtherLayerRow';
 import { inboxPhase } from './inbox/phase';
+import { RepoBlock } from './inbox/RepoHeader';
+import { groupNeedsYouCount, groupOpenCount } from './inbox/selectors';
 import { StackGroup, StackLayerItem, byPosition } from './inbox/StackGroup';
+import {
+  useCollapsedRepos,
+  type CollapsedRepos,
+} from './inbox/useCollapsedRepos';
 
 const BUCKET_ORDER: Bucket[] = ['needs-you', 'in-progress', 'ready'];
 
@@ -24,7 +31,6 @@ const BUCKET_LABELS: Record<Bucket, string> = {
 };
 
 const LIST_LABEL = 'My pull requests';
-const SKELETON_ROWS_PER_SECTION = 3;
 
 function MyStackGroup({ stack }: { stack: MyStack }) {
   return (
@@ -97,26 +103,39 @@ function SectionBlock({ section }: { section: MySection }) {
   );
 }
 
-function orderedSections(snapshot: InboxSnapshot): MySection[] {
+function orderedSections(group: MyRepoGroup): MySection[] {
   return BUCKET_ORDER.flatMap((bucket) =>
-    snapshot.mine.filter(
+    group.sections.filter(
       (section) => section.bucket === bucket && section.entries.length > 0,
     ),
   );
 }
 
-function MyPrsSkeleton() {
+function urgentLabel(group: MyRepoGroup): string | null {
+  const needsYou = groupNeedsYouCount(group);
+  return needsYou > 0 ? `${needsYou} need you` : null;
+}
+
+interface MyRepoViewProps {
+  group: MyRepoGroup;
+  collapsed: CollapsedRepos;
+}
+
+function MyRepoView({ group, collapsed }: MyRepoViewProps) {
+  const sections = orderedSections(group);
+  if (sections.length === 0) return null;
   return (
-    <LoadingList>
-      {BUCKET_ORDER.map((bucket) => (
-        <div key={bucket}>
-          <div className="px-5 pt-4 pb-1.5">
-            <Skeleton className="h-2.5 w-20" />
-          </div>
-          <SkeletonRows count={SKELETON_ROWS_PER_SECTION} />
-        </div>
+    <RepoBlock
+      repo={group.repo}
+      countLabel={`${groupOpenCount(group)} open`}
+      urgentLabel={urgentLabel(group)}
+      expanded={!collapsed.isCollapsed(group.repo)}
+      onToggle={() => collapsed.toggle(group.repo)}
+    >
+      {sections.map((section) => (
+        <SectionBlock key={section.bucket} section={section} />
       ))}
-    </LoadingList>
+    </RepoBlock>
   );
 }
 
@@ -134,8 +153,15 @@ export interface MyPrsProps {
 }
 
 export function MyPrs({ snapshot, onOpenSettings }: MyPrsProps) {
+  const collapsed = useCollapsedRepos('mine');
   const phase = inboxPhase(snapshot);
-  if (phase.kind === 'loading') return <MyPrsSkeleton />;
+  if (phase.kind === 'loading') {
+    return (
+      <LoadingList>
+        <RepoSkeletons />
+      </LoadingList>
+    );
+  }
   if (phase.kind === 'failed') {
     return <LoadError title="Couldn't load your PRs" message={phase.message} />;
   }
@@ -149,8 +175,8 @@ export function MyPrs({ snapshot, onOpenSettings }: MyPrsProps) {
       empty={NOTHING_NEEDS_YOU}
     >
       {(displayed) =>
-        orderedSections(displayed).map((section) => (
-          <SectionBlock key={section.bucket} section={section} />
+        displayed.mine.map((group) => (
+          <MyRepoView key={group.repo} group={group} collapsed={collapsed} />
         ))
       }
     </InboxList>

@@ -56,6 +56,13 @@ export interface Korev {
   start(): Promise<void>;
 }
 
+function sameRepoSet(left: string[], right: string[]): boolean {
+  const rightSet = new Set(right);
+  return (
+    left.length === right.length && left.every((repo) => rightSet.has(repo))
+  );
+}
+
 export function createKorev(deps: KorevDeps): Korev {
   const settings = notifyOnChange(
     createSettingsStore({
@@ -108,7 +115,7 @@ export function createKorev(deps: KorevDeps): Korev {
         onToken,
       }),
     onStateChange: (state) => deps.broadcast(IpcChannel.AuthChanged, state),
-    onConnectionChange: (connection) => void followConnection(connection),
+    onConnectionChange: followConnection,
     warn: deps.warn,
   });
 
@@ -138,12 +145,14 @@ export function createKorev(deps: KorevDeps): Korev {
       return;
     }
     await restoreCachedInbox();
-    await inbox.restart();
+    void inbox.restart();
   }
 
   async function setRepos(repos: string[]): Promise<Settings> {
+    const previous = settings.current().repos;
     const updated = await settings.update({ repos });
-    void inbox.restart();
+    if (sameRepoSet(previous, updated.repos)) inbox.reorder();
+    else void inbox.restart();
     return updated;
   }
 
@@ -151,6 +160,13 @@ export function createKorev(deps: KorevDeps): Korev {
     const updated = await settings.update({ theme });
     deps.applyTheme(updated.theme);
     return updated;
+  }
+
+  function setCollapsedRepos(view: InboxView, repos: string[]) {
+    const { collapsedRepos } = settings.current();
+    return settings.update({
+      collapsedRepos: { ...collapsedRepos, [view]: repos },
+    });
   }
 
   async function followRepoRenames(renames: RepoRename[]): Promise<void> {
@@ -213,6 +229,7 @@ export function createKorev(deps: KorevDeps): Korev {
     [IpcChannel.SettingsSetTheme]: setTheme,
     [IpcChannel.SettingsSetLastView]: (lastView: InboxView) =>
       settings.update({ lastView }),
+    [IpcChannel.SettingsSetCollapsedRepos]: setCollapsedRepos,
     [IpcChannel.SettingsSuggestedRepos]: suggestedRepos,
     [IpcChannel.ReposOwners]: repoOwners,
     [IpcChannel.ReposPage]: repoPage,

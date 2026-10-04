@@ -41,17 +41,24 @@ function inboxResult(
 }
 
 function fakeBuildInbox(input: InboxInput): Inbox {
+  const repos = [...new Set(input.mine.map((pr) => pr.repo))];
   return {
-    mine: [
-      {
-        bucket: 'needs-you',
-        count: input.mine.length,
-        entries: input.mine.map((pr) => ({
-          kind: 'pr',
-          item: { pr, bucket: 'needs-you', reasons: [] },
-        })),
-      },
-    ],
+    mine: repos.map((repo) => {
+      const prs = input.mine.filter((pr) => pr.repo === repo);
+      return {
+        repo,
+        sections: [
+          {
+            bucket: 'needs-you',
+            count: prs.length,
+            entries: prs.map((pr) => ({
+              kind: 'pr',
+              item: { pr, bucket: 'needs-you', reasons: [] },
+            })),
+          },
+        ],
+      };
+    }),
     reviews: [],
     reviewCount: 0,
   };
@@ -59,6 +66,7 @@ function fakeBuildInbox(input: InboxInput): Inbox {
 
 function prIds(snapshot: InboxSnapshot | undefined): string[] {
   return (snapshot?.mine ?? [])
+    .flatMap((group) => group.sections)
     .flatMap((section) => section.entries)
     .flatMap((entry) => (entry.kind === 'pr' ? [entry.item.pr.id] : []));
 }
@@ -175,6 +183,27 @@ describe('inbox poller', () => {
 
     expect(last()).toMatchObject({ status: 'live', fromCache: false });
     expect(prIds(last())).toEqual(['PR_1']);
+  });
+
+  it('reorders the repo groups in the new repo order without fetching', async () => {
+    const { poller, client, session, last, syncCount } = setup();
+    session.repos = ['acme/api', 'acme/web'];
+    client.fetchInbox.mockResolvedValueOnce(
+      inboxResult([
+        makePr({ id: 'PR_API', repo: 'acme/api' }),
+        makePr({ id: 'PR_WEB', repo: 'acme/web' }),
+      ]),
+    );
+    await poller.start();
+
+    session.repos = ['acme/web', 'acme/api'];
+    poller.reorder();
+
+    expect(last()?.mine.map((group) => group.repo)).toEqual([
+      'acme/web',
+      'acme/api',
+    ]);
+    expect(syncCount()).toBe(1);
   });
 
   it('runs a full refresh every three minutes while live', async () => {

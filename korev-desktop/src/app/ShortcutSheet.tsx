@@ -10,7 +10,10 @@ export const SHORTCUT_SHEET_KEY = '?';
 const SHORTCUTS: Shortcut[] = [
   { keys: ['J', '↓'], label: 'Next pull request' },
   { keys: ['K', '↑'], label: 'Previous pull request' },
-  { keys: ['→', '←'], label: 'Expand or collapse other stack layers' },
+  {
+    keys: ['→', '←'],
+    label: 'Expand or collapse a repo, approved PRs or stack layers',
+  },
   { keys: ['↵'], label: 'Open details' },
   { keys: ['⌘↵'], label: 'Open on GitHub' },
   { keys: ['Esc'], label: 'Close details' },

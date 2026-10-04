@@ -30,3 +30,10 @@ export function saveTheme(theme: ThemePreference): Promise<void> {
 export function saveLastView(view: InboxView): Promise<void> {
   return applySettings(korev().settings.setLastView(view));
 }
+
+export function saveCollapsedRepos(
+  view: InboxView,
+  repos: string[],
+): Promise<void> {
+  return applySettings(korev().settings.setCollapsedRepos(view, repos));
+}

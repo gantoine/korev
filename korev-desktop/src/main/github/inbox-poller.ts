@@ -3,7 +3,8 @@ import {
   type UnknownMergeStreaks,
   advanceUnknownMergeStreaks,
 } from '../../inbox/merge-streaks';
-import type { Bucket, InboxSnapshot, SyncStatus } from '../../shared/inbox';
+import { sortByRepoOrder } from '../../inbox/repo-order';
+import type { InboxSnapshot, SyncStatus } from '../../shared/inbox';
 import type { GithubClient, InboxResult } from './client';
 import {
   AuthLostError,
@@ -45,6 +46,7 @@ export type TriggerReason = 'manual' | 'focus';
 export interface InboxPoller {
   snapshot(): InboxSnapshot;
   restore(cached: InboxSnapshot): void;
+  reorder(): void;
   start(): Promise<void>;
   trigger(reason: TriggerReason): Promise<void>;
   restart(): Promise<void>;
@@ -75,8 +77,6 @@ const OFFLINE_FIRST_RETRY_MS = 30 * MS_PER_SECOND;
 const OFFLINE_MAX_RETRY_MS = 5 * MS_PER_MINUTE;
 const OFFLINE_BACKOFF_FACTOR = 2;
 
-const BUCKETS: readonly Bucket[] = ['needs-you', 'in-progress', 'ready'];
-
 const TRIGGER_BLOCKING_STATUSES: ReadonlySet<SyncStatus> = new Set([
   'paused',
   'rate_limited',
@@ -96,7 +96,7 @@ export function emptySnapshot(repoCount = 0): InboxSnapshot {
     fromCache: false,
     viewerLogin: null,
     repoCount,
-    mine: BUCKETS.map((bucket) => ({ bucket, count: 0, entries: [] })),
+    mine: [],
     reviews: [],
     reviewCount: 0,
     problems: [],
@@ -169,6 +169,15 @@ class GithubInboxPoller implements InboxPoller {
       error: null,
       rateLimitResetAt: null,
       nextRetryAt: null,
+    });
+  }
+
+  reorder(): void {
+    const repoOrder = this.deps.repos();
+    this.#publish({
+      ...this.#current,
+      mine: sortByRepoOrder(this.#current.mine, repoOrder),
+      reviews: sortByRepoOrder(this.#current.reviews, repoOrder),
     });
   }
 
@@ -312,6 +321,7 @@ class GithubInboxPoller implements InboxPoller {
       viewer: { login: fetched.viewerLogin, teams: fetched.viewerTeams },
       now,
       unknownMergeStreaks: this.#session.unknownMergeStreaks,
+      repoOrder: this.deps.repos(),
     });
     return {
       ...emptySnapshot(repoCount),

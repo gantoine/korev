@@ -36,6 +36,8 @@ const bridge: KorevBridge = {
     setRepos: (repos) => invoke(IpcChannel.SettingsSetRepos, repos),
     setTheme: (theme) => invoke(IpcChannel.SettingsSetTheme, theme),
     setLastView: (view) => invoke(IpcChannel.SettingsSetLastView, view),
+    setCollapsedRepos: (view, repos) =>
+      invoke(IpcChannel.SettingsSetCollapsedRepos, view, repos),
     suggestedRepos: () => invoke(IpcChannel.SettingsSuggestedRepos),
     onChanged: (listener) => subscribe(IpcChannel.SettingsChanged, listener),
   },

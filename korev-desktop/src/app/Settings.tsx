@@ -6,6 +6,7 @@ import type { InboxSnapshot } from '../shared/inbox';
 import type { Settings, ThemePreference } from '../shared/settings';
 import { korev } from './bridge';
 import { pluralize } from './format';
+import { InboxOrder } from './repos/InboxOrder';
 import { RepoPicker } from './repos/RepoPicker';
 import { uniqueRepos } from './repos/repo-name';
 import { TokenForm } from './setup/TokenForm';
@@ -137,6 +138,7 @@ function RepositoriesCard({ repos }: { repos: string[] }) {
         selected={repos}
         onToggle={(repo, checked) => (checked ? watch(repo) : unwatch(repo))}
       />
+      {repos.length > 1 ? <InboxOrder repos={repos} /> : null}
       {toast ? (
         <RepoToastView toast={toast} onUndo={undo} onClose={dismiss} />
       ) : null}

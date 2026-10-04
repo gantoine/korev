@@ -25,7 +25,7 @@ export interface AuthServiceDeps {
   fetchViewer(token: string): Promise<ViewerInfo>;
   createDeviceFlow(onToken: (token: string) => Promise<void>): DeviceFlow;
   onStateChange(state: AuthState): void;
-  onConnectionChange(connection: Connection | null): void;
+  onConnectionChange(connection: Connection | null): Promise<void>;
   warn(message: string): void;
 }
 
@@ -107,7 +107,7 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
     stored = next;
     announce();
     const connection = toConnection(next);
-    deps.onConnectionChange(connection);
+    await deps.onConnectionChange(connection);
     return connection;
   }
 
@@ -145,7 +145,7 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
     stored = null;
     unlockFailures = 0;
     announce();
-    deps.onConnectionChange(null);
+    await deps.onConnectionChange(null);
   }
 
   function applyLoad(loaded: TokenLoadResult): void {
@@ -165,7 +165,7 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
 
   async function retryUnlock(): Promise<void> {
     await init();
-    if (stored) deps.onConnectionChange(toConnection(stored));
+    if (stored) await deps.onConnectionChange(toConnection(stored));
   }
 
   deviceFlow.subscribe(announce);

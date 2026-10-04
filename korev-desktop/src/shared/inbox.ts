@@ -58,6 +58,11 @@ export interface MySection {
   entries: MyEntry[];
 }
 
+export interface MyRepoGroup {
+  repo: string;
+  sections: MySection[];
+}
+
 export type PrSize = 'S' | 'M' | 'L';
 
 export interface SizeInfo {
@@ -108,6 +113,23 @@ export type ReviewEntry =
   | { kind: 'pr'; item: ReviewItem }
   | { kind: 'stack'; stack: ReviewStack };
 
+export type Approval =
+  | { kind: 'you' }
+  | { kind: 'teammate'; login: string }
+  | { kind: 'bot'; login: string }
+  | { kind: 'overall' };
+
+export interface ApprovedReview {
+  item: ReviewItem;
+  approval: Approval;
+}
+
+export interface ReviewRepoGroup {
+  repo: string;
+  entries: ReviewEntry[];
+  approved: ApprovedReview[];
+}
+
 export type SyncStatus =
   | 'idle'
   | 'syncing'
@@ -138,8 +160,8 @@ export interface InboxSnapshot {
   fromCache: boolean;
   viewerLogin: string | null;
   repoCount: number;
-  mine: MySection[];
-  reviews: ReviewEntry[];
+  mine: MyRepoGroup[];
+  reviews: ReviewRepoGroup[];
   reviewCount: number;
   problems: Problem[];
   truncated: { mine: boolean; reviews: boolean };

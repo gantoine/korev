@@ -15,7 +15,6 @@ export interface MyPrRowProps {
 export function MyPrRow({ item, stackPlace }: MyPrRowProps) {
   const now = useNow(MINUTE_MS);
   const { pr, reasons } = item;
-  const reference = stackPlace ? `#${pr.number}` : prRef(pr);
   return (
     <PrRow
       optionKey={prRef(pr)}
@@ -28,7 +27,7 @@ export function MyPrRow({ item, stackPlace }: MyPrRowProps) {
         title={pr.title}
         meta={
           <>
-            <span className="font-mono">{reference}</span>
+            <span className="font-mono">#{pr.number}</span>
             <span className={NARROW_HIDDEN}>
               {' · updated '}
               {formatAge(pr.updatedAt, now)}

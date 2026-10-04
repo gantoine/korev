@@ -87,6 +87,7 @@ const CHECK_RUN_TYPE = 'CheckRun';
 const STATUS_CONTEXT_TYPE = 'StatusContext';
 const USER_TYPE = 'User';
 const TEAM_TYPE = 'Team';
+const BOT_TYPE = 'Bot';
 const COMPLETED_STATUS = 'COMPLETED';
 const STACK_WARNING =
   'GitHub returned no usable stack data; showing stacked PRs as single PRs.';
@@ -194,7 +195,7 @@ function toSubmittedReview(node: LatestReviewNode): SubmittedReview[] {
   const login = node.author?.login;
   const state = oneOf(node.state, REVIEW_STATES, null);
   if (!login || !state) return [];
-  return [{ login, state }];
+  return [{ login, state, isBot: node.author?.__typename === BOT_TYPE }];
 }
 
 function toSubmittedReviews(node: PullRequestNode): SubmittedReview[] {

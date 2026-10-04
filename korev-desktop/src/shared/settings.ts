@@ -9,11 +9,14 @@ export interface WindowBounds {
   height: number;
 }
 
+export type CollapsedRepos = Record<InboxView, string[]>;
+
 export interface Settings {
   repos: string[];
   theme: ThemePreference;
   lastView: InboxView;
   windowBounds: WindowBounds | null;
+  collapsedRepos: CollapsedRepos;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -21,4 +24,5 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   lastView: 'review',
   windowBounds: null,
+  collapsedRepos: { review: [], mine: [] },
 };
