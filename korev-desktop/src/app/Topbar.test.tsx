@@ -1,10 +1,14 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { formatClock } from './format';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DAY_MS, formatClock, formatWeekday } from './format';
 import { SYNCED_AT, makeSnapshot } from './test-fixtures';
 import { Topbar } from './Topbar';
 
-afterEach(cleanup);
+beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe('Topbar', () => {
   it('offers Reconnect GitHub when auth is lost', () => {
@@ -21,6 +25,7 @@ describe('Topbar', () => {
   });
 
   it('shows when the offline data was synced', () => {
+    vi.setSystemTime(SYNCED_AT);
     render(
       <Topbar
         title="My PRs"
@@ -29,7 +34,23 @@ describe('Topbar', () => {
       />,
     );
     expect(
-      screen.getByText(`Offline · ${formatClock(SYNCED_AT)}`),
+      screen.getByText(`Offline · data from ${formatClock(SYNCED_AT)}`),
+    ).toBeTruthy();
+  });
+
+  it('names the day of cached data from an earlier day while syncing', () => {
+    vi.setSystemTime(new Date(Date.parse(SYNCED_AT) + 3 * DAY_MS));
+    render(
+      <Topbar
+        title="My PRs"
+        snapshot={makeSnapshot({ status: 'syncing', fromCache: true })}
+        onReconnect={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText(
+        `Syncing… · data from ${formatWeekday(SYNCED_AT)} ${formatClock(SYNCED_AT)}`,
+      ),
     ).toBeTruthy();
   });
 });

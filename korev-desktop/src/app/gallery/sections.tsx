@@ -32,6 +32,7 @@ import {
   type BannerItem,
   type SidebarNavItem,
 } from '../../design-system';
+import { UnlockStep } from '../setup/UnlockStep';
 import { Row, Section } from './Section';
 import {
   SAMPLE_FILES,
@@ -467,6 +468,9 @@ export function InboxSection() {
       </div>
       <BannerSamples />
       <SidePanelSample />
+      <div className="w-105 rounded-lg border border-border-2 bg-surface p-7">
+        <UnlockStep failures={2} />
+      </div>
     </Section>
   );
 }

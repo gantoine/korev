@@ -13,6 +13,7 @@ export enum IpcChannel {
   AuthCancelDeviceFlow = 'auth:cancel-device-flow',
   AuthUseToken = 'auth:use-token',
   AuthDisconnect = 'auth:disconnect',
+  AuthRetryUnlock = 'auth:retry-unlock',
   SettingsLoad = 'settings:load',
   SettingsSetRepos = 'settings:set-repos',
   SettingsSetTheme = 'settings:set-theme',
@@ -47,6 +48,7 @@ export interface KorevBridge {
     cancelDeviceFlow(): Promise<void>;
     useToken(token: string): Promise<TokenResult>;
     disconnect(): Promise<void>;
+    retryUnlock(): Promise<void>;
     onChanged(listener: (state: AuthState) => void): Unsubscribe;
   };
   settings: {

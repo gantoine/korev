@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Button, Icon, IconButton, Kbd, cn } from '../design-system';
 import type { InboxSnapshot } from '../shared/inbox';
-import { formatClock, formatSynced } from './format';
+import { formatClock, formatDataTime, formatSynced } from './format';
 import { DRAG_REGION, NO_DRAG } from './layout';
 import { refreshInbox } from './useInboxSnapshot';
 import { MINUTE_MS, useNow } from './useNow';
@@ -35,10 +35,18 @@ function StatusText({
 
 const HINT_KEYS = ['J', 'K', '↵', '?'];
 
-function withTime(label: string, iso: string | null, prefix?: string): string {
+function withTime(label: string, iso: string | null, prefix: string): string {
   if (!iso) return label;
-  const clock = formatClock(iso);
-  return `${label} · ${prefix ? `${prefix} ${clock}` : clock}`;
+  return `${label} · ${prefix} ${formatClock(iso)}`;
+}
+
+function withDataTime(label: string, iso: string | null, now: number): string {
+  if (!iso) return label;
+  return `${label} · data from ${formatDataTime(iso, now)}`;
+}
+
+function cachedDataTime(snapshot: InboxSnapshot): string | null {
+  return snapshot.fromCache ? snapshot.syncedAt : null;
 }
 
 interface SyncStatusProps {
@@ -57,7 +65,7 @@ function SyncStatus({ snapshot, onReconnect }: SyncStatusProps) {
             size={13}
             className="animate-spin motion-reduce:animate-none"
           />
-          Syncing…
+          {withDataTime('Syncing…', cachedDataTime(snapshot), now)}
         </StatusText>
       );
     case 'error':
@@ -83,7 +91,7 @@ function SyncStatus({ snapshot, onReconnect }: SyncStatusProps) {
     case 'offline':
       return (
         <StatusText tone="warning">
-          {withTime('Offline', snapshot.syncedAt)}
+          {withDataTime('Offline', snapshot.syncedAt, now)}
         </StatusText>
       );
     case 'paused':

@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import type { AuthState } from '../shared/auth';
+import type { AuthState, Connection } from '../shared/auth';
 import type { InboxSnapshot } from '../shared/inbox';
 import { IpcChannel } from '../shared/ipc-contract';
 import type { RepoOwner, RepoPage } from '../shared/repos';
@@ -7,6 +7,7 @@ import type { InboxView, Settings, ThemePreference } from '../shared/settings';
 import { buildInbox } from '../inbox/build-inbox';
 import { isGithubUrl } from './app-origin';
 import { createAuthService } from './auth-service';
+import type { SecretCipher } from './encrypted-file';
 import type { FileSystem } from './file-system';
 import { DeviceFlowLogin } from './github/auth';
 import { createGithubClient } from './github/client';
@@ -19,16 +20,18 @@ import {
 import { applyRenames, type RepoRename } from './github/repo-access';
 import { emptyRepoPage } from './github/repo-picker';
 import type { FetchLike } from './github/request';
+import { createInboxCache } from './inbox-cache';
 import type { IpcHandlers } from './ipc';
 import {
   createSettingsStore,
   notifyOnChange,
   type SettingsStore,
 } from './settings-store';
-import { createTokenStore, type SecretCipher } from './token-store';
+import { createTokenStore } from './token-store';
 
 const SETTINGS_FILE = 'settings.json';
 const TOKEN_FILE = 'github-token.bin';
+const INBOX_CACHE_FILE = 'inbox-cache.bin';
 
 export interface KorevDeps {
   userDataPath: string;
@@ -66,6 +69,11 @@ export function createKorev(deps: KorevDeps): Korev {
     fs: deps.fs,
     path: join(deps.userDataPath, TOKEN_FILE),
   });
+  const inboxCache = createInboxCache({
+    cipher: deps.cipher,
+    fs: deps.fs,
+    path: join(deps.userDataPath, INBOX_CACHE_FILE),
+  });
   const github = createGithubClient({
     fetch: deps.fetch,
     apiUrl: deps.github.apiUrl,
@@ -83,7 +91,7 @@ export function createKorev(deps: KorevDeps): Korev {
         setTimeout(callback, milliseconds),
       clearTimeout: (handle) => clearTimeout(handle),
     },
-    publish: (snapshot) => deps.broadcast(IpcChannel.InboxUpdated, snapshot),
+    publish: publishInbox,
   });
 
   const auth = createAuthService({
@@ -100,12 +108,38 @@ export function createKorev(deps: KorevDeps): Korev {
         onToken,
       }),
     onStateChange: (state) => deps.broadcast(IpcChannel.AuthChanged, state),
-    onConnectionChange: (connection) => {
-      github.clearSessionCache();
-      if (connection) void inbox.restart();
-      else inbox.reset();
-    },
+    onConnectionChange: (connection) => void followConnection(connection),
+    warn: deps.warn,
   });
+
+  function publishInbox(snapshot: InboxSnapshot): void {
+    deps.broadcast(IpcChannel.InboxUpdated, snapshot);
+    if (snapshot.status !== 'live') return;
+    inboxCache.save(snapshot).catch((error: unknown) => {
+      deps.warn(`Could not cache the inbox: ${String(error)}`);
+    });
+  }
+
+  async function restoreCachedInbox(): Promise<void> {
+    const login = auth.state().connection?.login;
+    if (!login) return;
+    const cached = await inboxCache.load(login).catch((error: unknown) => {
+      deps.warn(`Could not read the cached inbox: ${String(error)}`);
+      return null;
+    });
+    if (cached) inbox.restore(cached);
+  }
+
+  async function followConnection(connection: Connection | null) {
+    github.clearSessionCache();
+    if (!connection) {
+      inbox.reset();
+      await inboxCache.clear();
+      return;
+    }
+    await restoreCachedInbox();
+    await inbox.restart();
+  }
 
   async function setRepos(repos: string[]): Promise<Settings> {
     const updated = await settings.update({ repos });
@@ -173,6 +207,7 @@ export function createKorev(deps: KorevDeps): Korev {
     [IpcChannel.AuthCancelDeviceFlow]: () => auth.cancelDeviceFlow(),
     [IpcChannel.AuthUseToken]: useToken,
     [IpcChannel.AuthDisconnect]: () => auth.disconnect(),
+    [IpcChannel.AuthRetryUnlock]: () => auth.retryUnlock(),
     [IpcChannel.SettingsLoad]: () => settings.current(),
     [IpcChannel.SettingsSetRepos]: setRepos,
     [IpcChannel.SettingsSetTheme]: setTheme,
@@ -190,6 +225,7 @@ export function createKorev(deps: KorevDeps): Korev {
     if (problem) deps.warn(problem);
     deps.applyTheme(loaded.theme);
     await auth.init();
+    await restoreCachedInbox();
     void inbox.start();
   }
 

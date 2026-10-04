@@ -28,6 +28,7 @@ const bridge: KorevBridge = {
     cancelDeviceFlow: () => invoke(IpcChannel.AuthCancelDeviceFlow),
     useToken: (token) => invoke(IpcChannel.AuthUseToken, token),
     disconnect: () => invoke(IpcChannel.AuthDisconnect),
+    retryUnlock: () => invoke(IpcChannel.AuthRetryUnlock),
     onChanged: (listener) => subscribe(IpcChannel.AuthChanged, listener),
   },
   settings: {

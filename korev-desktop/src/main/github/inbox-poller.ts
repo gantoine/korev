@@ -44,6 +44,7 @@ export type TriggerReason = 'manual' | 'focus';
 
 export interface InboxPoller {
   snapshot(): InboxSnapshot;
+  restore(cached: InboxSnapshot): void;
   start(): Promise<void>;
   trigger(reason: TriggerReason): Promise<void>;
   restart(): Promise<void>;
@@ -92,6 +93,7 @@ export function emptySnapshot(repoCount = 0): InboxSnapshot {
   return {
     status: 'idle',
     syncedAt: null,
+    fromCache: false,
     viewerLogin: null,
     repoCount,
     mine: BUCKETS.map((bucket) => ({ bucket, count: 0, entries: [] })),
@@ -156,6 +158,18 @@ class GithubInboxPoller implements InboxPoller {
 
   snapshot(): InboxSnapshot {
     return this.#current;
+  }
+
+  restore(cached: InboxSnapshot): void {
+    this.#dataToken = this.deps.token();
+    this.#publish({
+      ...cached,
+      status: 'idle',
+      fromCache: true,
+      error: null,
+      rateLimitResetAt: null,
+      nextRetryAt: null,
+    });
   }
 
   start(): Promise<void> {

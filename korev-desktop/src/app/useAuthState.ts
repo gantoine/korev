@@ -36,6 +36,10 @@ export async function connectWithToken(token: string): Promise<TokenResult> {
   return result;
 }
 
+export function retryUnlock(): Promise<void> {
+  return korev().auth.retryUnlock();
+}
+
 export async function disconnect(): Promise<void> {
   await korev().auth.disconnect();
   forgetRepoCatalog();

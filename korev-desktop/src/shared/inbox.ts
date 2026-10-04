@@ -135,6 +135,7 @@ export interface Problem {
 export interface InboxSnapshot {
   status: SyncStatus;
   syncedAt: string | null;
+  fromCache: boolean;
   viewerLogin: string | null;
   repoCount: number;
   mine: MySection[];

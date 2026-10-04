@@ -32,6 +32,7 @@ export interface AuthState {
   connection: Connection | null;
   login: LoginState;
   storageProblem: string | null;
+  unlockFailures: number;
 }
 
 export type TokenResult =

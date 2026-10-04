@@ -77,7 +77,14 @@ and open `#gallery`).
   collapses into "3 problems ▾".
 - Toasts are only for short confirmations ("Repos saved").
 - Sync status lives only in the topbar ("Synced 2m ago", "Offline · data from 14:02",
-  "Reconnect GitHub").
+  "Reconnect GitHub"). Data from an earlier day names the day ("data from Fri 14:02").
+- **Cached launch:** Korev opens with the inbox it saved at the last sync. The topbar
+  reads "Syncing… · data from 14:02" until the first sync lands. Cached rows are never
+  dimmed or turned into skeletons, and the first live sync replaces them without the
+  updates pill.
+- **Locked sign-in:** when the keychain refuses the saved sign-in, Setup shows "Korev
+  couldn't unlock your saved GitHub sign-in" with Try again and Sign in again, never the
+  Connect screen.
 
 ## Keyboard model
 

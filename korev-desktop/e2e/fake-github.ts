@@ -133,12 +133,16 @@ function sendJson(response: ServerResponse, body: unknown, headers = {}) {
 export interface FakeGithub {
   url: string;
   publishNewPr(): void;
+  holdInbox(): void;
+  releaseInbox(): void;
   close(): Promise<void>;
 }
 
 export async function startFakeGithub(): Promise<FakeGithub> {
   const myPrs: PrSpec[] = [FAILING_PR];
   let pendingThreadAt: string | null = null;
+  let inboxGate: Promise<void> = Promise.resolve();
+  let openInboxGate = () => undefined as void;
 
   function graphqlData(request: GraphqlRequest) {
     const { query } = request;
@@ -182,6 +186,7 @@ export async function startFakeGithub(): Promise<FakeGithub> {
       return notifications(response);
     if (request.method === 'POST' && request.url === '/graphql') {
       const body = JSON.parse(await readBody(request)) as GraphqlRequest;
+      if (body.query.includes('query Inbox')) await inboxGate;
       return sendJson(response, { data: graphqlData(body) });
     }
     response.writeHead(404).end();
@@ -199,6 +204,18 @@ export async function startFakeGithub(): Promise<FakeGithub> {
       myPrs.push(NEW_PR);
       pendingThreadAt = new Date().toISOString();
     },
-    close: () => new Promise((resolve) => server.close(() => resolve())),
+    holdInbox() {
+      inboxGate = new Promise((resolve) => {
+        openInboxGate = resolve;
+      });
+    },
+    releaseInbox() {
+      openInboxGate();
+    },
+    close: () => {
+      openInboxGate();
+      server.closeAllConnections();
+      return new Promise((resolve) => server.close(() => resolve()));
+    },
   };
 }

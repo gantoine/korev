@@ -194,6 +194,7 @@ export function makeSnapshot(
   return {
     status: 'live',
     syncedAt: SYNCED_AT,
+    fromCache: false,
     viewerLogin: 'octocat',
     repoCount: 4,
     mine: [
@@ -284,12 +285,14 @@ export const CONNECTED_AUTH: AuthState = {
   connection: { login: 'octocat', avatarUrl: null, method: 'oauth' },
   login: { status: 'idle' },
   storageProblem: null,
+  unlockFailures: 0,
 };
 
 export const DISCONNECTED_AUTH: AuthState = {
   connection: null,
   login: { status: 'idle' },
   storageProblem: null,
+  unlockFailures: 0,
 };
 
 export const WATCHING_SETTINGS: Settings = {

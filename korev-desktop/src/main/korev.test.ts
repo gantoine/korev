@@ -2,9 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { IpcChannel } from '../shared/ipc-contract';
 import { createMemoryFileSystem } from './file-system';
 import { githubEndpoints } from './github/config';
-import { type CannedResponse, createFakeFetch } from './github/test-fetch';
+import { emptySnapshot } from './github/inbox-poller';
+import {
+  type CannedReply,
+  type CannedResponse,
+  createFakeFetch,
+} from './github/test-fetch';
 import { createKorev, type Korev } from './korev';
-import type { SecretCipher } from './token-store';
+import type { SecretCipher } from './encrypted-file';
 
 const VIEWER = { login: 'maria', avatarUrl: 'https://example.test/maria.png' };
 const EMPTY_SEARCH = {
@@ -44,14 +49,48 @@ function inboxResponse(nameWithOwner: string): CannedResponse {
   };
 }
 
+const USER_DATA = '/user-data';
+const CACHED_PR_TITLE = 'Cached from the last session';
+
+const neverAnswers: CannedReply = () => new Promise(() => undefined);
+
+function previousSession(): Record<string, string> {
+  const snapshot = {
+    ...emptySnapshot(1),
+    status: 'live',
+    syncedAt: '2026-10-02T18:40:00.000Z',
+    viewerLogin: VIEWER.login,
+    reviews: [
+      {
+        kind: 'pr',
+        item: { pr: { title: CACHED_PR_TITLE } },
+      },
+    ],
+  };
+  return {
+    [`${USER_DATA}/settings.json`]: JSON.stringify({ repos: ['acme/api'] }),
+    [`${USER_DATA}/github-token.bin`]: JSON.stringify({
+      token: 'gho_saved',
+      method: 'oauth',
+      login: VIEWER.login,
+      avatarUrl: null,
+    }),
+    [`${USER_DATA}/inbox-cache.bin`]: JSON.stringify({ version: 1, snapshot }),
+  };
+}
+
 let running: Korev | null = null;
 
-function setup(...replies: CannedResponse[]) {
+function setup(
+  replies: CannedReply[] = [],
+  files: Record<string, string> = {},
+) {
   const fake = createFakeFetch(...replies);
   const broadcast = vi.fn();
+  const fs = createMemoryFileSystem(files);
   const korev = createKorev({
-    userDataPath: '/user-data',
-    fs: createMemoryFileSystem(),
+    userDataPath: USER_DATA,
+    fs,
     cipher: plainCipher,
     fetch: fake.fetch,
     github: githubEndpoints(true, {}),
@@ -68,7 +107,7 @@ function setup(...replies: CannedResponse[]) {
       .filter(([channel]) => channel === IpcChannel.SettingsChanged)
       .map(([, settings]) => settings);
   running = korev;
-  return { korev, invoke, settingsBroadcasts };
+  return { korev, fs, invoke, settingsBroadcasts };
 }
 
 afterEach(() => {
@@ -89,12 +128,12 @@ describe('korev', () => {
   });
 
   it('saves and broadcasts the new name when a selected repo was renamed', async () => {
-    const { korev, invoke, settingsBroadcasts } = setup(
+    const { korev, invoke, settingsBroadcasts } = setup([
       viewerResponse,
       inboxResponse('acme/api-v2'),
       teamsResponse,
       inboxResponse('acme/api-v2'),
-    );
+    ]);
     await korev.start();
     await invoke(IpcChannel.AuthUseToken, 'ghp_token');
 
@@ -107,5 +146,31 @@ describe('korev', () => {
       ['acme/api'],
       ['acme/api-v2'],
     ]);
+  });
+
+  it('shows the cached inbox from the last session while the first sync runs', async () => {
+    const { korev, invoke } = setup([neverAnswers], previousSession());
+
+    await korev.start();
+
+    expect(await invoke(IpcChannel.AuthGetState)).toMatchObject({
+      connection: { login: VIEWER.login },
+    });
+    expect(await invoke(IpcChannel.InboxLoad)).toMatchObject({
+      status: 'syncing',
+      fromCache: true,
+      reviews: [{ item: { pr: { title: CACHED_PR_TITLE } } }],
+    });
+  });
+
+  it('deletes the cached inbox on disconnect', async () => {
+    const { korev, fs, invoke } = setup([neverAnswers], previousSession());
+    await korev.start();
+
+    await invoke(IpcChannel.AuthDisconnect);
+
+    await vi.waitFor(() =>
+      expect(fs.files.has(`${USER_DATA}/inbox-cache.bin`)).toBe(false),
+    );
   });
 });

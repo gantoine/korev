@@ -71,6 +71,7 @@ export function installFakeBridge({
       cancelDeviceFlow: vi.fn(async () => undefined),
       useToken: vi.fn(async () => ({ ok: false as const, message: 'nope' })),
       disconnect: vi.fn(async () => undefined),
+      retryUnlock: vi.fn(async () => undefined),
       onChanged: vi.fn(() => () => undefined),
     },
     settings: {

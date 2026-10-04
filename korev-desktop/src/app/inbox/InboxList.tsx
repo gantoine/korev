@@ -56,6 +56,16 @@ function useScrollAnchor(
   }, [listbox, key]);
 }
 
+function useAnchorOnFirstLiveSync(
+  displayed: InboxSnapshot,
+  captureAnchor: () => void,
+) {
+  const [previous, setPrevious] = useState(displayed);
+  if (previous === displayed) return;
+  if (previous.fromCache && !displayed.fromCache) captureAnchor();
+  setPrevious(displayed);
+}
+
 function useFocusWithin() {
   const [focused, setFocused] = useState(false);
   const onFocus = () => setFocused(true);
@@ -112,6 +122,7 @@ export function InboxList({
     selection.selectedKey,
   );
   const docked = useMediaQuery(WIDE_QUERY);
+  useAnchorOnFirstLiveSync(held.displayed, captureAnchor);
 
   function applyHeld() {
     captureAnchor();

@@ -5,7 +5,7 @@ import type {
   LoginState,
   TokenResult,
 } from '../shared/auth';
-import type { StoredToken, TokenStore } from './token-store';
+import type { StoredToken, TokenLoadResult, TokenStore } from './token-store';
 
 export interface ViewerInfo {
   login: string;
@@ -26,10 +26,12 @@ export interface AuthServiceDeps {
   createDeviceFlow(onToken: (token: string) => Promise<void>): DeviceFlow;
   onStateChange(state: AuthState): void;
   onConnectionChange(connection: Connection | null): void;
+  warn(message: string): void;
 }
 
 export interface AuthService {
   init(): Promise<void>;
+  retryUnlock(): Promise<void>;
   state(): AuthState;
   token(): string | null;
   startDeviceFlow(): Promise<LoginState>;
@@ -43,6 +45,8 @@ const SCOPE_GRANTED_BY: Record<string, readonly string[]> = {
   'read:org': ['read:org', 'write:org', 'admin:org'],
 };
 const REQUIRED_TOKEN_SCOPES = Object.keys(SCOPE_GRANTED_BY);
+const UNLOCK_FAILED_WARNING =
+  'Korev could not decrypt the saved GitHub sign-in with the keychain key.';
 
 export function missingScopes(granted: readonly string[]): string[] {
   return REQUIRED_TOKEN_SCOPES.filter(
@@ -70,6 +74,7 @@ function toConnection(stored: StoredToken): Connection {
 export function createAuthService(deps: AuthServiceDeps): AuthService {
   let stored: StoredToken | null = null;
   let storageProblem: string | null = null;
+  let unlockFailures = 0;
   const deviceFlow = deps.createDeviceFlow(async (token) => {
     await connect(token, 'oauth', await deps.fetchViewer(token));
   });
@@ -79,6 +84,7 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
       connection: stored ? toConnection(stored) : null,
       login: deviceFlow.getState(),
       storageProblem,
+      unlockFailures,
     };
   }
 
@@ -137,17 +143,36 @@ export function createAuthService(deps: AuthServiceDeps): AuthService {
     deviceFlow.cancel();
     await deps.tokenStore.clear();
     stored = null;
+    unlockFailures = 0;
     announce();
     deps.onConnectionChange(null);
+  }
+
+  function applyLoad(loaded: TokenLoadResult): void {
+    stored = loaded.status === 'loaded' ? loaded.token : null;
+    if (loaded.status !== 'unreadable') {
+      unlockFailures = 0;
+      return;
+    }
+    unlockFailures += 1;
+    deps.warn(UNLOCK_FAILED_WARNING);
+  }
+
+  async function init(): Promise<void> {
+    applyLoad(await deps.tokenStore.load());
+    announce();
+  }
+
+  async function retryUnlock(): Promise<void> {
+    await init();
+    if (stored) deps.onConnectionChange(toConnection(stored));
   }
 
   deviceFlow.subscribe(announce);
 
   return {
-    async init() {
-      stored = await deps.tokenStore.load();
-      announce();
-    },
+    init,
+    retryUnlock,
     state,
     token: () => stored?.token ?? null,
     startDeviceFlow: () => deviceFlow.start(),

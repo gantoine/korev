@@ -5,7 +5,11 @@ import type { InboxSnapshot } from '../../shared/inbox';
 import type { PullRequest } from '../../shared/pull-request';
 import type { InboxResult } from './client';
 import { AuthLostError, NetworkError, RateLimitedError } from './errors';
-import { type InboxPollerClient, createInboxPoller } from './inbox-poller';
+import {
+  type InboxPollerClient,
+  createInboxPoller,
+  emptySnapshot,
+} from './inbox-poller';
 
 const START = new Date('2026-10-03T12:00:00Z');
 const SECOND = 1000;
@@ -145,6 +149,31 @@ describe('inbox poller', () => {
       syncedAt: START.toISOString(),
       repoCount: 1,
     });
+    expect(prIds(last())).toEqual(['PR_1']);
+  });
+
+  it('shows a restored snapshot while the first sync runs, then replaces it', async () => {
+    const { poller, client, last } = setup();
+    const pending = deferred<InboxResult>();
+    client.fetchInbox.mockReturnValueOnce(pending.promise);
+    const cached = fakeBuildInbox({
+      mine: [makePr({ id: 'PR_CACHED' })],
+    } as InboxInput);
+
+    poller.restore({
+      ...emptySnapshot(1),
+      ...cached,
+      status: 'live',
+      syncedAt: '2026-10-02T18:40:00.000Z',
+      viewerLogin: 'maria',
+    });
+    const starting = poller.start();
+    expect(last()).toMatchObject({ status: 'syncing', fromCache: true });
+    expect(prIds(last())).toEqual(['PR_CACHED']);
+    pending.resolve(inboxResult([makePr({ id: 'PR_1' })]));
+    await starting;
+
+    expect(last()).toMatchObject({ status: 'live', fromCache: false });
     expect(prIds(last())).toEqual(['PR_1']);
   });
 

@@ -95,6 +95,17 @@ describe('ReviewInbox', () => {
     expect(optionTitles()[0]).toContain(SPIKE_REVIEW.pr.title);
   });
 
+  it('applies the first live sync after a cached launch without holding it', () => {
+    installFakeBridge();
+    const { rerenderWith } = renderInbox(makeSnapshot({ fromCache: true }));
+    fireEvent.mouseEnter(screen.getByRole('listbox').parentElement!);
+
+    rerenderWith(reorderedSnapshot());
+
+    expect(optionTitles()[0]).toContain(SPIKE_REVIEW.pr.title);
+    expect(screen.queryByRole('button', { name: /update/ })).toBeNull();
+  });
+
   it('keeps the selected PR selected and in the panel across a reorder', () => {
     installFakeBridge();
     const { rerenderWith } = renderInbox();
