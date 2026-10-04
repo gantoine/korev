@@ -5,6 +5,7 @@ import {
   ButtonSection,
   DisplaySection,
   FormSection,
+  InboxSection,
   NavigationSection,
   OverlaySection,
   ReviewSection,
@@ -47,6 +48,7 @@ export function Gallery() {
         <NavigationSection />
         <OverlaySection />
         <ReviewSection />
+        <InboxSection />
       </main>
     </div>
   );

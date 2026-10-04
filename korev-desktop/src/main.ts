@@ -1,21 +1,127 @@
-import { app, BrowserWindow } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  Menu,
+  nativeTheme,
+  powerMonitor,
+  safeStorage,
+  screen,
+  shell,
+  type WebContents,
+} from 'electron';
 import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import started from 'electron-squirrel-startup';
+import { IpcChannel, type AppCommand } from './shared/ipc-contract';
+import type { WindowBounds } from './shared/settings';
+import { appMenuTemplate } from './main/app-menu';
+import { isAppUrl, type AppOrigin } from './main/app-origin';
+import { nodeFileSystem } from './main/file-system';
+import { registerIpcHandlers } from './main/ipc';
+import { githubEndpoints } from './main/github/config';
+import { createKorev, type Korev } from './main/korev';
+import { createSafeStorageCipher } from './main/safe-storage-cipher';
+import { restorableBounds } from './main/window-bounds';
+
+const DEFAULT_WINDOW_SIZE = { width: 1280, height: 832 };
+const MIN_WINDOW_SIZE = { width: 760, height: 520 };
+const TRAFFIC_LIGHT_POSITION = { x: 18, y: 17 };
+
+const appOrigin: AppOrigin = {
+  devServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
+  rendererDirectory: path.join(
+    __dirname,
+    `../renderer/${MAIN_WINDOW_VITE_NAME}`,
+  ),
+};
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
   app.quit();
 }
 
-const createWindow = () => {
+function broadcast(channel: string, payload: unknown) {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send(channel, payload);
+  }
+}
+
+function sendToFocusedWindow(command: AppCommand) {
+  BrowserWindow.getFocusedWindow()?.webContents.send(
+    IpcChannel.AppCommand,
+    command,
+  );
+}
+
+function installAppMenu() {
+  const template = appMenuTemplate({
+    appName: app.name,
+    isDevelopment: !app.isPackaged,
+    send: sendToFocusedWindow,
+  });
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+function createKorevApp(): Korev {
+  return createKorev({
+    userDataPath: app.getPath('userData'),
+    fs: nodeFileSystem,
+    cipher: createSafeStorageCipher(safeStorage, process.platform),
+    fetch: (input, init) => fetch(input, init),
+    github: githubEndpoints(app.isPackaged, process.env),
+    sleep: (milliseconds, signal) => delay(milliseconds, undefined, { signal }),
+    openExternal: (url) => shell.openExternal(url),
+    applyTheme: (theme) => {
+      nativeTheme.themeSource = theme;
+    },
+    broadcast,
+    warn: (message) => console.warn(message),
+  });
+}
+
+function hardenWebContents(contents: WebContents) {
+  contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  contents.on('will-navigate', (event, url) => {
+    if (!isAppUrl(url, appOrigin)) event.preventDefault();
+  });
+}
+
+function keepInboxFresh(korev: Korev) {
+  app.on('browser-window-focus', () => void korev.inbox.trigger('focus'));
+  powerMonitor.on('suspend', () => korev.inbox.suspend());
+  powerMonitor.on('resume', () => void korev.inbox.resume());
+  app.on('before-quit', () => korev.inbox.stop());
+}
+
+function rememberBounds(window: BrowserWindow, korev: Korev) {
+  window.on('close', () => {
+    const windowBounds: WindowBounds = window.getNormalBounds();
+    void korev.settings.update({ windowBounds });
+  });
+}
+
+const createWindow = (korev: Korev) => {
+  const savedBounds = restorableBounds(
+    korev.settings.current().windowBounds,
+    screen.getAllDisplays().map((display) => display.workArea),
+  );
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 832,
+    ...DEFAULT_WINDOW_SIZE,
+    ...savedBounds,
+    minWidth: MIN_WINDOW_SIZE.width,
+    minHeight: MIN_WINDOW_SIZE.height,
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: TRAFFIC_LIGHT_POSITION,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
     },
   });
+  rememberBounds(mainWindow, korev);
 
   // and load the index.html of the app.
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
@@ -27,20 +133,33 @@ const createWindow = () => {
   }
 
   // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
+  }
 };
+
+app.on('web-contents-created', (_event, contents) =>
+  hardenWebContents(contents),
+);
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
-  createWindow();
+app.whenReady().then(async () => {
+  installAppMenu();
+  const korev = createKorevApp();
+  registerIpcHandlers(ipcMain, korev.handlers, (url) =>
+    isAppUrl(url, appOrigin),
+  );
+  await korev.start();
+  keepInboxFresh(korev);
+  createWindow(korev);
 
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      createWindow(korev);
     }
   });
 });

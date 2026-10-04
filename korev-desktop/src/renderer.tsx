@@ -15,13 +15,16 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './design-system/styles/index.css';
+import { App } from './app/App';
 import { Gallery } from './app/Gallery';
+
+const GALLERY_HASH = '#gallery';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing #root element');
 
+const showGallery = import.meta.env.DEV && location.hash === GALLERY_HASH;
+
 createRoot(root).render(
-  <StrictMode>
-    <Gallery />
-  </StrictMode>,
+  <StrictMode>{showGallery ? <Gallery /> : <App />}</StrictMode>,
 );
