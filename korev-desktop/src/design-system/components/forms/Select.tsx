@@ -12,6 +12,7 @@ export type SelectOption = string | { value: string; label: string };
 
 export interface SelectProps {
   label?: string;
+  ariaLabel?: string;
   hint?: string;
   options: SelectOption[];
   value?: string;
@@ -29,6 +30,7 @@ function normalize(option: SelectOption) {
 
 export function Select({
   label,
+  ariaLabel,
   hint,
   options,
   value,
@@ -44,6 +46,7 @@ export function Select({
       <div className={cn(fieldBoxClass({ size, disabled }), 'relative')}>
         {icon ? <Icon name={icon} size={14} /> : null}
         <select
+          aria-label={ariaLabel}
           value={value}
           disabled={disabled}
           onChange={(event) => onChange?.(event.target.value)}

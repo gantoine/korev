@@ -17,6 +17,8 @@ const SHORTCUTS: Shortcut[] = [
   { keys: ['↵'], label: 'Open details' },
   { keys: ['⌘↵'], label: 'Open on GitHub' },
   { keys: ['Esc'], label: 'Close details' },
+  { keys: ['⇧M'], label: 'Merge the selected PR (My PRs)' },
+  { keys: ['⇧X'], label: 'Close the selected PR (My PRs)' },
   { keys: ['.'], label: 'Show held updates' },
   { keys: ['⌘1'], label: 'Review requests' },
   { keys: ['⌘2'], label: 'My PRs' },

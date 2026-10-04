@@ -19,7 +19,7 @@ import {
   type LayerShape,
   type StackShape,
 } from './entries';
-import { prRef } from './pr-ref';
+import { prRef } from '../../shared/pr-ref';
 import type { Placement } from './structure';
 
 export type PanelSubject =

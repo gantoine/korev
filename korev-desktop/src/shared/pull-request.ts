@@ -53,6 +53,15 @@ export interface ReviewRequestEvent {
   createdAt: string;
 }
 
+export interface PrComment {
+  authorLogin: string | null;
+  isBot: boolean;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  url: string;
+}
+
 export interface StackLayer {
   position: number;
   number: number;
@@ -98,4 +107,6 @@ export interface PullRequest {
   reviews: SubmittedReview[];
   reviewRequestEvents: ReviewRequestEvent[];
   stack: StackInfo | null;
+  isInMergeQueue: boolean;
+  comments: PrComment[];
 }

@@ -107,7 +107,13 @@ function RepoToastView({ toast, onUndo, onClose }: RepoToastViewProps) {
   );
 }
 
-function RepositoriesCard({ repos }: { repos: string[] }) {
+interface RepositoriesCardProps {
+  settings: Settings;
+  repoMerge: InboxSnapshot['repoMerge'];
+}
+
+function RepositoriesCard({ settings, repoMerge }: RepositoriesCardProps) {
+  const { repos } = settings;
   const [unwatched, setUnwatched] = useState<string[]>([]);
   const { toast, show, dismiss } = useTimedToast<RepoToast>(REPO_TOAST_MS);
 
@@ -138,7 +144,13 @@ function RepositoriesCard({ repos }: { repos: string[] }) {
         selected={repos}
         onToggle={(repo, checked) => (checked ? watch(repo) : unwatch(repo))}
       />
-      {repos.length > 1 ? <InboxOrder repos={repos} /> : null}
+      {repos.length > 0 ? (
+        <InboxOrder
+          repos={repos}
+          mergeWith={settings.mergeWith}
+          repoMerge={repoMerge}
+        />
+      ) : null}
       {toast ? (
         <RepoToastView toast={toast} onUndo={undo} onClose={dismiss} />
       ) : null}
@@ -189,7 +201,10 @@ export function SettingsPage({ auth, settings, snapshot }: SettingsPageProps) {
           authLost={snapshot?.status === 'auth_lost'}
         />
       ) : null}
-      <RepositoriesCard repos={settings.repos} />
+      <RepositoriesCard
+        settings={settings}
+        repoMerge={snapshot?.repoMerge ?? {}}
+      />
       <AppearanceCard theme={settings.theme} />
       <AboutCard stacksUnavailable={snapshot?.stacksUnavailable ?? false} />
     </div>

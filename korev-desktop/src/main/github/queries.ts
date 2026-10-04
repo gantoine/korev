@@ -3,6 +3,7 @@ import {
   CHECK_CONTEXTS_LIMIT,
   FILES_LIMIT,
   LATEST_REVIEWS_LIMIT,
+  PR_COMMENTS_LIMIT,
   ORGANIZATIONS_LIMIT,
   REVIEW_REQUESTS_LIMIT,
   REPO_PAGE_SIZE,
@@ -43,7 +44,9 @@ export type OwnerQualifier = 'org' | 'user';
 const REPO_ALIAS_PREFIX = 'repo';
 const OWNER_VARIABLE_PREFIX = 'owner';
 const NAME_VARIABLE_PREFIX = 'name';
-const REPO_ACCESS_FIELDS = 'nameWithOwner viewerPermission isArchived';
+const REPO_ACCESS_FIELDS = `nameWithOwner viewerPermission isArchived
+    viewerDefaultMergeMethod mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed
+    mergeQueue { id }`;
 const IN_NAME_QUALIFIER = 'in:name';
 
 export type InboxQueryVariables = {
@@ -171,7 +174,11 @@ fragment PrCore on PullRequest {
 const MY_PR_FRAGMENT = `
 fragment MyPrFields on PullRequest {
   ...PrCore
+  isInMergeQueue
   reviewThreads(first: ${REVIEW_THREADS_LIMIT}) { ${REVIEW_THREAD_CONNECTION} }
+  comments(last: ${PR_COMMENTS_LIMIT}) {
+    nodes { author { __typename login } body createdAt updatedAt url }
+  }
 }`;
 
 const REVIEW_REQUEST_FRAGMENT = `

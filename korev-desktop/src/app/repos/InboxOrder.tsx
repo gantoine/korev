@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Icon } from '../../design-system';
-import { saveRepos } from '../useSettings';
+import { Icon, Select, type SelectOption } from '../../design-system';
+import type { MergeTool, RepoMergeInfo } from '../../shared/merge';
+import { saveMergeWith, saveRepos } from '../useSettings';
 
 const MOVE_STEPS: Partial<Record<string, number>> = {
   ArrowUp: -1,
@@ -13,12 +14,49 @@ export function moveRepo(repos: string[], repo: string, to: number): string[] {
   return [...others.slice(0, target), repo, ...others.slice(target)];
 }
 
+const DETECTED_QUEUE = 'detected-queue';
+
+const MERGE_TOOL_OPTIONS: SelectOption[] = [
+  { value: 'github', label: 'GitHub' },
+  { value: 'trunk', label: 'Trunk' },
+  { value: 'mergify', label: 'Mergify' },
+  { value: 'aviator', label: 'Aviator' },
+];
+
+const DETECTED_QUEUE_OPTIONS: SelectOption[] = [
+  { value: DETECTED_QUEUE, label: 'GitHub merge queue · detected' },
+];
+
+function MergeWithSelect({
+  repo,
+  tool,
+  info,
+}: {
+  repo: string;
+  tool: MergeTool;
+  info: RepoMergeInfo | undefined;
+}) {
+  const detected = info?.hasMergeQueue ?? false;
+  return (
+    <Select
+      ariaLabel={`Merge ${repo} with`}
+      options={detected ? DETECTED_QUEUE_OPTIONS : MERGE_TOOL_OPTIONS}
+      value={detected ? DETECTED_QUEUE : tool}
+      disabled={detected}
+      onChange={(value) => void saveMergeWith(repo, value as MergeTool)}
+      className="w-56"
+    />
+  );
+}
+
 function placeLabel(index: number, total: number): string {
   return `${index + 1} of ${total}`;
 }
 
 interface OrderRowProps {
   repo: string;
+  tool: MergeTool;
+  info: RepoMergeInfo | undefined;
   index: number;
   total: number;
   handleRef: (element: HTMLButtonElement | null) => void;
@@ -29,6 +67,8 @@ interface OrderRowProps {
 
 function OrderRow({
   repo,
+  tool,
+  info,
   index,
   total,
   handleRef,
@@ -49,7 +89,7 @@ function OrderRow({
       onDragStart={onDragStart}
       onDragOver={(event) => event.preventDefault()}
       onDrop={onDrop}
-      className="flex h-9 items-center gap-2 rounded-sm px-1 hover:bg-hover"
+      className="flex h-10 items-center gap-2 rounded-sm px-1 hover:bg-hover"
     >
       <button
         ref={handleRef}
@@ -64,11 +104,18 @@ function OrderRow({
       <span className="min-w-0 flex-1 truncate font-mono text-sm text-fg-1">
         {repo}
       </span>
+      <MergeWithSelect repo={repo} tool={tool} info={info} />
     </li>
   );
 }
 
-export function InboxOrder({ repos }: { repos: string[] }) {
+export interface InboxOrderProps {
+  repos: string[];
+  mergeWith: Record<string, MergeTool>;
+  repoMerge: Record<string, RepoMergeInfo>;
+}
+
+export function InboxOrder({ repos, mergeWith, repoMerge }: InboxOrderProps) {
   const [announcement, setAnnouncement] = useState('');
   const [dragged, setDragged] = useState<string | null>(null);
   const [moved, setMoved] = useState<string | null>(null);
@@ -101,6 +148,8 @@ export function InboxOrder({ repos }: { repos: string[] }) {
           <OrderRow
             key={repo}
             repo={repo}
+            tool={mergeWith[repo] ?? 'github'}
+            info={repoMerge[repo]}
             index={index}
             total={repos.length}
             handleRef={(element) => {

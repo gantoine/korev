@@ -5,6 +5,7 @@ import type {
   CiState,
   MergeStateStatus,
   Mergeable,
+  PrComment,
   PrState,
   PullRequest,
   ReviewDecision,
@@ -17,6 +18,7 @@ import type {
 } from '../../shared/pull-request';
 import {
   type CheckContextNode,
+  type CommentNode,
   type LatestReviewNode,
   type PullRequestNode,
   type ReviewerNode,
@@ -130,7 +132,23 @@ export function toPullRequest(
     reviews: toSubmittedReviews(node),
     reviewRequestEvents: toReviewRequestEvents(node),
     stack: toStack(node, warn),
+    isInMergeQueue: node.isInMergeQueue ?? false,
+    comments: presentNodes(node.comments).flatMap(toComment),
   };
+}
+
+function toComment(node: CommentNode): PrComment[] {
+  if (!node.body || !node.createdAt || !node.url) return [];
+  return [
+    {
+      authorLogin: node.author?.login ?? null,
+      isBot: node.author?.__typename === BOT_TYPE,
+      body: node.body,
+      createdAt: node.createdAt,
+      updatedAt: node.updatedAt ?? node.createdAt,
+      url: node.url,
+    },
+  ];
 }
 
 function oneOf<TValue extends string, TFallback>(

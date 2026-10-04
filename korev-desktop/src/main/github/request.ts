@@ -170,7 +170,7 @@ function toHttpError(
   const resetAt = rateLimitResetAtFor(status, headers, now);
   if (resetAt) return new RateLimitedError(message, resetAt);
   if (status === HTTP_FORBIDDEN) return forbiddenError(message, headers);
-  return new GithubHttpError(message, status, errorCode(body));
+  return new GithubHttpError(message, status, errorCode(body), body);
 }
 
 function rateLimitResetAtFor(
@@ -204,7 +204,12 @@ function matchGroup(text: string, pattern: RegExp): string | null {
 
 function errorMessage(status: number, body: unknown): string {
   const fields = asRecord(body);
-  const candidates = [fields.message, fields.error_description, fields.error];
+  const candidates = [
+    fields.message,
+    asRecord(fields.details).message,
+    fields.error_description,
+    fields.error,
+  ];
   const message = candidates.find((value) => typeof value === 'string');
   if (typeof message === 'string') return message;
   return `GitHub answered with HTTP ${status}`;

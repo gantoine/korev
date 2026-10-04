@@ -1,4 +1,5 @@
 import type { Problem } from '../../shared/inbox';
+import type { RepoMergeInfo } from '../../shared/merge';
 import type { PullRequest } from '../../shared/pull-request';
 import type { RepoOwner, RepoPage } from '../../shared/repos';
 import { splitRepoName } from '../repo-names';
@@ -64,6 +65,7 @@ export interface InboxResult {
   truncated: { mine: boolean; reviews: boolean };
   problems: Problem[];
   renamedRepos: RepoRename[];
+  repoMerge: Record<string, RepoMergeInfo>;
   stacksUnavailable: boolean;
 }
 
@@ -115,6 +117,7 @@ interface CollectedSearches {
   progress: Record<SearchKey, SearchProgress>;
   problems: Problem[];
   renamedRepos: RepoRename[];
+  repoMerge: Record<string, RepoMergeInfo>;
 }
 
 interface InboxPageRequest {
@@ -223,6 +226,7 @@ class GithubApiClient implements GithubClient {
       },
       problems: uniqueProblems(searches.problems),
       renamedRepos: searches.renamedRepos,
+      repoMerge: searches.repoMerge,
       stacksUnavailable: this.#stacksUnavailable,
     };
   }
@@ -266,6 +270,7 @@ class GithubApiClient implements GithubClient {
       truncated: { mine: false, reviews: false },
       problems: [],
       renamedRepos: [],
+      repoMerge: {},
       stacksUnavailable: this.#stacksUnavailable,
     };
   }
@@ -284,6 +289,7 @@ class GithubApiClient implements GithubClient {
       progress: { mine: startProgress(), reviews: startProgress() },
       problems: [],
       renamedRepos: [],
+      repoMerge: {},
     };
     let accessTargets = repoAccessTargets(repos);
     while (SEARCH_KEYS.some((key) => !collected.progress[key].done)) {
@@ -494,6 +500,7 @@ function recordRepoAccess(
     ...toProblems(otherErrors, result.data, ssoHeader, token),
   );
   collected.renamedRepos.push(...access.renames);
+  Object.assign(collected.repoMerge, access.merge);
 }
 
 function toProblems(

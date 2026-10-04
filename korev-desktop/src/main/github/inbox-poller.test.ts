@@ -36,12 +36,15 @@ function inboxResult(
     truncated: { mine: false, reviews: false },
     problems: [],
     renamedRepos: [],
+    repoMerge: {},
     stacksUnavailable: false,
   };
 }
 
 function fakeBuildInbox(input: InboxInput): Inbox {
-  const repos = [...new Set(input.mine.map((pr) => pr.repo))];
+  const repos = [
+    ...new Set([...input.repoOrder, ...input.mine.map((pr) => pr.repo)]),
+  ].filter((repo) => input.mine.some((pr) => pr.repo === repo));
   return {
     mine: repos.map((repo) => {
       const prs = input.mine.filter((pr) => pr.repo === repo);
@@ -53,7 +56,7 @@ function fakeBuildInbox(input: InboxInput): Inbox {
             count: prs.length,
             entries: prs.map((pr) => ({
               kind: 'pr',
-              item: { pr, bucket: 'needs-you', reasons: [] },
+              item: { pr, bucket: 'needs-you', reasons: [], queue: null },
             })),
           },
         ],
@@ -99,6 +102,7 @@ function setup() {
     },
     token: () => session.token,
     repos: () => session.repos,
+    mergeWith: () => ({}),
     renameRepos: async (renames) => {
       session.repos = session.repos.map(
         (repo) => renames.find((rename) => rename.from === repo)?.to ?? repo,
@@ -166,7 +170,8 @@ describe('inbox poller', () => {
     client.fetchInbox.mockReturnValueOnce(pending.promise);
     const cached = fakeBuildInbox({
       mine: [makePr({ id: 'PR_CACHED' })],
-    } as InboxInput);
+      repoOrder: [],
+    } as unknown as InboxInput);
 
     poller.restore({
       ...emptySnapshot(1),
@@ -185,7 +190,7 @@ describe('inbox poller', () => {
     expect(prIds(last())).toEqual(['PR_1']);
   });
 
-  it('reorders the repo groups in the new repo order without fetching', async () => {
+  it('rebuilds the repo groups in the new repo order without fetching', async () => {
     const { poller, client, session, last, syncCount } = setup();
     session.repos = ['acme/api', 'acme/web'];
     client.fetchInbox.mockResolvedValueOnce(
@@ -197,7 +202,7 @@ describe('inbox poller', () => {
     await poller.start();
 
     session.repos = ['acme/web', 'acme/api'];
-    poller.reorder();
+    poller.rebuild();
 
     expect(last()?.mine.map((group) => group.repo)).toEqual([
       'acme/web',

@@ -18,6 +18,7 @@ function build(input: Partial<InboxInput>) {
     now: NOW,
     unknownMergeStreaks: {},
     repoOrder: [],
+    mergeWith: {},
     ...input,
   });
 }

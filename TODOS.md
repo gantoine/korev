@@ -15,3 +15,7 @@
   - history Korev should search: past reviews, AI findings
 
   Claude Code and Codex subscriptions run only on the user's machine, so LLM actions stay local either way.
+
+## Merge actions
+
+- **P3 · Suggest "Merge with" from repo config files.** When a repo is added, pre-fill its "Merge with" setting from `.mergify.yml` / `.github/mergify.yml` (with `queue_rules`) or `.aviator/config.yml`, and let the user confirm it. It saves a step on the first merge in Mergify and Aviator repos without guessing. Trunk has no file-based signal. Start in `korev-desktop/src/main/github/repo-picker.ts`, where repos are added.

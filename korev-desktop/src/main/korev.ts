@@ -1,17 +1,25 @@
 import { join } from 'node:path';
 import type { AuthState, Connection } from '../shared/auth';
 import type { InboxSnapshot } from '../shared/inbox';
+import type { ActionResult } from '../shared/merge';
 import { IpcChannel } from '../shared/ipc-contract';
 import type { RepoOwner, RepoPage } from '../shared/repos';
 import type { InboxView, Settings, ThemePreference } from '../shared/settings';
 import { buildInbox } from '../inbox/build-inbox';
+import { parseMergeRequest, parseMergeTool, parseTarget } from './action-input';
 import { isGithubUrl } from './app-origin';
 import { createAuthService } from './auth-service';
 import type { SecretCipher } from './encrypted-file';
 import type { FileSystem } from './file-system';
 import { DeviceFlowLogin } from './github/auth';
 import { createGithubClient } from './github/client';
-import { createInboxPoller, type InboxPoller } from './github/inbox-poller';
+import {
+  createInboxPoller,
+  type InboxPoller,
+  type Scheduler,
+} from './github/inbox-poller';
+import { createGithubWriter } from './github/mutations';
+import { createPrActions } from './github/pr-actions';
 import {
   GITHUB_OAUTH_CLIENT_ID,
   GITHUB_OAUTH_SCOPES,
@@ -32,6 +40,15 @@ import { createTokenStore } from './token-store';
 const SETTINGS_FILE = 'settings.json';
 const TOKEN_FILE = 'github-token.bin';
 const INBOX_CACHE_FILE = 'inbox-cache.bin';
+const INVALID_ACTION: ActionResult = {
+  ok: false,
+  message: 'Korev could not read that request.',
+};
+
+const timers: Scheduler = {
+  setTimeout: (callback, milliseconds) => setTimeout(callback, milliseconds),
+  clearTimeout: (handle) => clearTimeout(handle),
+};
 
 export interface KorevDeps {
   userDataPath: string;
@@ -91,14 +108,25 @@ export function createKorev(deps: KorevDeps): Korev {
     buildInbox,
     token: () => auth.token(),
     repos: () => settings.current().repos,
+    mergeWith: () => settings.current().mergeWith,
     renameRepos: followRepoRenames,
     now: () => new Date(),
-    scheduler: {
-      setTimeout: (callback, milliseconds) =>
-        setTimeout(callback, milliseconds),
-      clearTimeout: (handle) => clearTimeout(handle),
-    },
+    scheduler: timers,
     publish: publishInbox,
+  });
+
+  const prActions = createPrActions({
+    writer: createGithubWriter({
+      fetch: deps.fetch,
+      apiUrl: deps.github.apiUrl,
+    }),
+    token: () => auth.token(),
+    repoMerge: (repo) => inbox.snapshot().repoMerge[repo],
+    mergeWith: (repo) => settings.current().mergeWith[repo] ?? 'github',
+    now: () => Date.now(),
+    scheduler: timers,
+    onChange: () => broadcastInbox(inbox.snapshot()),
+    refresh: () => void inbox.trigger('manual'),
   });
 
   const auth = createAuthService({
@@ -119,8 +147,17 @@ export function createKorev(deps: KorevDeps): Korev {
     warn: deps.warn,
   });
 
+  function withActions(snapshot: InboxSnapshot): InboxSnapshot {
+    return { ...snapshot, actions: prActions.state() };
+  }
+
+  function broadcastInbox(snapshot: InboxSnapshot): void {
+    deps.broadcast(IpcChannel.InboxUpdated, withActions(snapshot));
+  }
+
   function publishInbox(snapshot: InboxSnapshot): void {
-    deps.broadcast(IpcChannel.InboxUpdated, snapshot);
+    if (snapshot.status === 'live') prActions.reconcile(snapshot);
+    broadcastInbox(snapshot);
     if (snapshot.status !== 'live') return;
     inboxCache.save(snapshot).catch((error: unknown) => {
       deps.warn(`Could not cache the inbox: ${String(error)}`);
@@ -151,7 +188,7 @@ export function createKorev(deps: KorevDeps): Korev {
   async function setRepos(repos: string[]): Promise<Settings> {
     const previous = settings.current().repos;
     const updated = await settings.update({ repos });
-    if (sameRepoSet(previous, updated.repos)) inbox.reorder();
+    if (sameRepoSet(previous, updated.repos)) inbox.rebuild();
     else void inbox.restart();
     return updated;
   }
@@ -167,6 +204,27 @@ export function createKorev(deps: KorevDeps): Korev {
     return settings.update({
       collapsedRepos: { ...collapsedRepos, [view]: repos },
     });
+  }
+
+  async function setMergeWith(repo: unknown, tool: unknown) {
+    const mergeTool = parseMergeTool(tool);
+    const current = settings.current();
+    if (typeof repo !== 'string' || !mergeTool) return current;
+    const updated = await settings.update({
+      mergeWith: { ...current.mergeWith, [repo]: mergeTool },
+    });
+    inbox.rebuild();
+    return updated;
+  }
+
+  function withParsed<T>(
+    parse: (value: unknown) => T | null,
+    run: (parsed: T) => Promise<ActionResult>,
+  ): (value: unknown) => Promise<ActionResult> {
+    return (value) => {
+      const parsed = parse(value);
+      return parsed ? run(parsed) : Promise.resolve(INVALID_ACTION);
+    };
   }
 
   async function followRepoRenames(renames: RepoRename[]): Promise<void> {
@@ -216,7 +274,7 @@ export function createKorev(deps: KorevDeps): Korev {
   }
 
   const handlers: IpcHandlers = {
-    [IpcChannel.InboxLoad]: () => inbox.snapshot(),
+    [IpcChannel.InboxLoad]: () => withActions(inbox.snapshot()),
     [IpcChannel.InboxRefresh]: () => inbox.trigger('manual'),
     [IpcChannel.AuthGetState]: () => auth.state(),
     [IpcChannel.AuthStartDeviceFlow]: () => auth.startDeviceFlow(),
@@ -235,6 +293,11 @@ export function createKorev(deps: KorevDeps): Korev {
     [IpcChannel.ReposPage]: repoPage,
     [IpcChannel.ReposSearch]: searchRepos,
     [IpcChannel.ShellOpenGithub]: openGithub,
+    [IpcChannel.SettingsSetMergeWith]: setMergeWith,
+    [IpcChannel.PrMerge]: withParsed(parseMergeRequest, prActions.merge),
+    [IpcChannel.PrClose]: withParsed(parseTarget, prActions.close),
+    [IpcChannel.PrReopen]: withParsed(parseTarget, prActions.reopen),
+    [IpcChannel.PrCancelQueue]: withParsed(parseTarget, prActions.cancelQueue),
   };
 
   async function start(): Promise<void> {
@@ -246,5 +309,15 @@ export function createKorev(deps: KorevDeps): Korev {
     void inbox.start();
   }
 
-  return { handlers, settings, inbox, start };
+  const lifecycle: Korev['inbox'] = {
+    trigger: (reason) => inbox.trigger(reason),
+    suspend: () => inbox.suspend(),
+    resume: () => inbox.resume(),
+    stop: () => {
+      inbox.stop();
+      prActions.stop();
+    },
+  };
+
+  return { handlers, settings, inbox: lifecycle, start };
 }

@@ -1,5 +1,5 @@
 import type { PullRequest, StackLayer } from '../../shared/pull-request';
-import { prRef } from './pr-ref';
+import { prRef } from '../../shared/pr-ref';
 import type { Placement } from './structure';
 
 export interface ItemShape {

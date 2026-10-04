@@ -177,3 +177,28 @@ describe('classifyMyPr in-progress reasons', () => {
     expect(result.bucket).toBe('ready');
   });
 });
+
+describe('classifyMyPr queue status', () => {
+  it('keeps a queued PR in progress instead of ready', () => {
+    const result = classifyMyPr(makePr(), {
+      unknownMergeStreak: 1,
+      queue: { kind: 'queued', tool: 'trunk', by: 'li', at: null, url: null },
+    });
+
+    expect(result.bucket).toBe('in-progress');
+    expect(result.reasons).toEqual([
+      { code: 'in-queue', label: 'In Trunk queue', severity: 'neutral' },
+    ]);
+  });
+
+  it('puts a PR the queue removed back in Needs you', () => {
+    const result = classifyMyPr(makePr(), {
+      unknownMergeStreak: 1,
+      queue: { kind: 'removed', tool: 'github', reason: null, url: null },
+    });
+
+    expect(result.bucket).toBe('needs-you');
+    expect(codesOf(result)).toEqual(['removed-from-queue']);
+    expect(result.reasons[0].label).toBe('Removed from merge queue');
+  });
+});

@@ -4,11 +4,13 @@ import type {
   ReviewItem,
   ReviewRepoGroup,
 } from '../shared/inbox';
+import type { MergeTool } from '../shared/merge';
 import type { PullRequest } from '../shared/pull-request';
 import { approvalFor } from './approval';
 import { classifyMyPr } from './classify';
 import type { UnknownMergeStreaks } from './merge-streaks';
 import { compareReviewItems, priority } from './priority';
+import { queueStatusFor } from './queue-status';
 import { groupByRepo, sortByRepoOrder } from './repo-order';
 import { reviewRequestFor, type Viewer } from './request-age';
 import { prSize } from './size';
@@ -21,6 +23,7 @@ export interface InboxInput {
   now: Date;
   unknownMergeStreaks: UnknownMergeStreaks;
   repoOrder: string[];
+  mergeWith: Record<string, MergeTool>;
 }
 
 export interface Inbox {
@@ -74,9 +77,13 @@ export function buildInbox({
   now,
   unknownMergeStreaks,
   repoOrder,
+  mergeWith,
 }: InboxInput): Inbox {
   const classified = mine.map((pr) =>
-    classifyMyPr(pr, { unknownMergeStreak: unknownMergeStreaks[pr.id] ?? 0 }),
+    classifyMyPr(pr, {
+      unknownMergeStreak: unknownMergeStreaks[pr.id] ?? 0,
+      queue: queueStatusFor(pr, mergeWith[pr.repo] ?? 'github'),
+    }),
   );
   const mineGroups = groupByRepo(classified, (item) => item.pr.repo).map(
     ([repo, items]) => ({ repo, sections: groupMyPrs(items) }),

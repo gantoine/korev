@@ -23,10 +23,10 @@ import type {
 import { formatAge, joinMeta, pluralize } from '../format';
 import { MINUTE_MS, useNow } from '../useNow';
 import { CiIcon } from './CiIcon';
-import { GONE_LABEL } from './GoneRow';
 import { subjectSummary, type PanelSubject } from './list-model';
 import { layerStateLabel } from './OtherLayerRow';
 import { authorHandle } from './PrRow';
+import { ActionFooter, ActionStatus, type PanelActions } from './PanelActions';
 import { PriorityBadge } from './PriorityBadge';
 import { ApprovalBadge, approvalText } from './ReviewRow';
 
@@ -357,7 +357,8 @@ function SubjectDetails({ subject }: { subject: PanelSubject }) {
 
 export interface PrPanelProps {
   subject: PanelSubject;
-  gone: boolean;
+  goneLabel: string | null;
+  actions?: PanelActions;
   mode: SidePanelMode;
   onClose: () => void;
   onOpenGithub: (url: string) => void;
@@ -365,7 +366,8 @@ export interface PrPanelProps {
 
 export function PrPanel({
   subject,
-  gone,
+  goneLabel,
+  actions,
   mode,
   onClose,
   onOpenGithub,
@@ -378,19 +380,24 @@ export function PrPanel({
       onClose={onClose}
       header={<PanelHeader subject={subject} />}
       footer={
-        <Button
-          variant="primary"
-          kbd={OPEN_SHORTCUT}
-          onClick={() => onOpenGithub(url)}
-          className="w-full"
-        >
-          {OPEN_ON_GITHUB}
-        </Button>
+        actions && !goneLabel ? (
+          <ActionFooter actions={actions} />
+        ) : (
+          <Button
+            variant="primary"
+            kbd={OPEN_SHORTCUT}
+            onClick={() => onOpenGithub(url)}
+            className="w-full"
+          >
+            {OPEN_ON_GITHUB}
+          </Button>
+        )
       }
     >
-      {gone ? (
-        <p className="mt-3 mb-0 text-xs text-fg-3">{GONE_LABEL}</p>
+      {goneLabel ? (
+        <p className="mt-3 mb-0 text-xs text-fg-3">{goneLabel}</p>
       ) : null}
+      {actions ? <ActionStatus actions={actions} /> : null}
       <SubjectDetails subject={subject} />
     </SidePanel>
   );

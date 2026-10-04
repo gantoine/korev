@@ -57,7 +57,7 @@ export function LayerLabel({ position, size }: StackPlace) {
   );
 }
 
-export { prRef } from './pr-ref';
+export { prRef } from '../../shared/pr-ref';
 
 export function authorHandle(login: string | null): string | null {
   return login ? `@${login}` : null;

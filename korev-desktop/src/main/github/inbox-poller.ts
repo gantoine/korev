@@ -5,6 +5,7 @@ import {
 } from '../../inbox/merge-streaks';
 import { sortByRepoOrder } from '../../inbox/repo-order';
 import type { InboxSnapshot, SyncStatus } from '../../shared/inbox';
+import type { MergeTool } from '../../shared/merge';
 import type { GithubClient, InboxResult } from './client';
 import {
   AuthLostError,
@@ -35,6 +36,7 @@ export interface InboxPollerDeps {
   buildInbox(input: InboxInput): Inbox;
   token(): string | null;
   repos(): string[];
+  mergeWith(): Record<string, MergeTool>;
   renameRepos(renames: RepoRename[]): Promise<void>;
   now(): Date;
   scheduler: Scheduler;
@@ -46,7 +48,7 @@ export type TriggerReason = 'manual' | 'focus';
 export interface InboxPoller {
   snapshot(): InboxSnapshot;
   restore(cached: InboxSnapshot): void;
-  reorder(): void;
+  rebuild(): void;
   start(): Promise<void>;
   trigger(reason: TriggerReason): Promise<void>;
   restart(): Promise<void>;
@@ -100,6 +102,8 @@ export function emptySnapshot(repoCount = 0): InboxSnapshot {
     reviews: [],
     reviewCount: 0,
     problems: [],
+    repoMerge: {},
+    actions: {},
     truncated: { mine: false, reviews: false },
     stacksUnavailable: false,
     error: null,
@@ -152,6 +156,7 @@ class GithubInboxPoller implements InboxPoller {
   #offlineAttempts = 0;
   #lastSyncFinishedAt: number | null = null;
   #dataToken: string | null = null;
+  #lastFetched: InboxResult | null = null;
   #timers: Partial<Record<TimerName, TimerHandle>> = {};
 
   constructor(private readonly deps: InboxPollerDeps) {}
@@ -172,7 +177,11 @@ class GithubInboxPoller implements InboxPoller {
     });
   }
 
-  reorder(): void {
+  rebuild(): void {
+    if (this.#lastFetched) {
+      this.#publish({ ...this.#current, ...this.#build(this.#lastFetched) });
+      return;
+    }
     const repoOrder = this.deps.repos();
     this.#publish({
       ...this.#current,
@@ -194,6 +203,7 @@ class GithubInboxPoller implements InboxPoller {
 
   restart(): Promise<void> {
     this.#invalidateInFlight();
+    this.#lastFetched = null;
     this.#session = freshSession();
     this.#offlineAttempts = 0;
     return this.#requestSync();
@@ -201,6 +211,7 @@ class GithubInboxPoller implements InboxPoller {
 
   reset(): void {
     this.#invalidateInFlight();
+    this.#lastFetched = null;
     this.#session = freshSession();
     this.#offlineAttempts = 0;
     this.#dataToken = null;
@@ -308,26 +319,33 @@ class GithubInboxPoller implements InboxPoller {
     this.#session.lastSeenUpdatedAt ??= startedAt.toISOString();
     this.#offlineAttempts = 0;
     this.#dataToken = token;
+    this.#lastFetched = fetched;
     this.#lastSyncFinishedAt = this.deps.now().getTime();
     this.#publish(this.#toSnapshot(fetched, repoCount));
     this.#scheduleLiveTimers();
   }
 
+  #build(fetched: InboxResult) {
+    return {
+      ...this.deps.buildInbox({
+        mine: fetched.mine,
+        reviews: fetched.reviews,
+        viewer: { login: fetched.viewerLogin, teams: fetched.viewerTeams },
+        now: this.deps.now(),
+        unknownMergeStreaks: this.#session.unknownMergeStreaks,
+        repoOrder: this.deps.repos(),
+        mergeWith: this.deps.mergeWith(),
+      }),
+      repoMerge: fetched.repoMerge,
+    };
+  }
+
   #toSnapshot(fetched: InboxResult, repoCount: number): InboxSnapshot {
-    const now = this.deps.now();
-    const built = this.deps.buildInbox({
-      mine: fetched.mine,
-      reviews: fetched.reviews,
-      viewer: { login: fetched.viewerLogin, teams: fetched.viewerTeams },
-      now,
-      unknownMergeStreaks: this.#session.unknownMergeStreaks,
-      repoOrder: this.deps.repos(),
-    });
     return {
       ...emptySnapshot(repoCount),
-      ...built,
+      ...this.#build(fetched),
       status: 'live',
-      syncedAt: now.toISOString(),
+      syncedAt: this.deps.now().toISOString(),
       viewerLogin: fetched.viewerLogin,
       problems: fetched.problems,
       truncated: fetched.truncated,

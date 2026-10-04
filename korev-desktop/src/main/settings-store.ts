@@ -6,10 +6,17 @@ import {
   type ThemePreference,
   type WindowBounds,
 } from '../shared/settings';
+import type { MergeTool } from '../shared/merge';
 import type { FileSystem } from './file-system';
 import { isRepoName } from './repo-names';
 
 const THEMES: readonly ThemePreference[] = ['system', 'light', 'dark'];
+const MERGE_TOOLS: readonly MergeTool[] = [
+  'github',
+  'trunk',
+  'mergify',
+  'aviator',
+];
 const VIEWS: readonly InboxView[] = ['review', 'mine'];
 const CORRUPT_SETTINGS_PROBLEM = 'Settings were reset';
 
@@ -37,6 +44,16 @@ function pickCollapsedRepos(value: unknown): CollapsedRepos {
   };
 }
 
+function pickMergeWith(value: unknown): Record<string, MergeTool> {
+  if (!value || typeof value !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      ([repo, tool]) =>
+        isRepoName(repo) && MERGE_TOOLS.includes(tool as MergeTool),
+    ),
+  );
+}
+
 function pickOneOf<T>(options: readonly T[], value: unknown, fallback: T): T {
   return options.includes(value as T) ? (value as T) : fallback;
 }
@@ -59,6 +76,7 @@ function sanitize(raw: Record<string, unknown>): Settings {
     lastView: pickOneOf(VIEWS, raw.lastView, DEFAULT_SETTINGS.lastView),
     windowBounds: pickBounds(raw.windowBounds),
     collapsedRepos: pickCollapsedRepos(raw.collapsedRepos),
+    mergeWith: pickMergeWith(raw.mergeWith),
   };
 }
 

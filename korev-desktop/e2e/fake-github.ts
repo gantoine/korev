@@ -18,10 +18,22 @@ const LOCAL_HOST = '127.0.0.1';
 const ACCESS_ALIAS =
   /(repo\d+): repository\(owner: \$(owner\d+), name: \$(name\d+)\)/g;
 const SEARCH_ALIAS = /(\w+): search\(/g;
+const MERGE_ASYNC =
+  /^\/repos\/([^/]+\/[^/]+)\/pulls\/(\d+)\/merge-async(?:\/([^/]+))?$/;
+const HTTP_OK = 200;
+const HTTP_ACCEPTED = 202;
 
 interface GraphqlRequest {
   query: string;
   variables?: Record<string, unknown>;
+}
+
+interface FakeComment {
+  author: { __typename: string; login: string };
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  url: string;
 }
 
 interface PrSpec {
@@ -60,7 +72,12 @@ const WEB_PR: PrSpec = {
   conclusion: 'SUCCESS',
 };
 
-function prNode(spec: PrSpec) {
+interface PrState {
+  inMergeQueue: boolean;
+  comments: FakeComment[];
+}
+
+function prNode(spec: PrSpec, state: PrState) {
   return {
     id: `PR_${spec.number}`,
     number: spec.number,
@@ -92,6 +109,8 @@ function prNode(spec: PrSpec) {
       },
     },
     latestReviews: { nodes: [] },
+    isInMergeQueue: state.inMergeQueue,
+    comments: { nodes: state.comments },
     stack: null,
     stackEntry: null,
     reviewThreads: {
@@ -105,7 +124,7 @@ function connection(nodes: unknown[]) {
   return { pageInfo: { hasNextPage: false, endCursor: null }, nodes };
 }
 
-function accessAliases(request: GraphqlRequest) {
+function accessAliases(request: GraphqlRequest, mergeQueueRepos: string[]) {
   const variables = request.variables ?? {};
   return Object.fromEntries(
     [...request.query.matchAll(ACCESS_ALIAS)].map(([, alias, owner, name]) => [
@@ -114,6 +133,15 @@ function accessAliases(request: GraphqlRequest) {
         nameWithOwner: `${variables[owner]}/${variables[name]}`,
         viewerPermission: 'WRITE',
         isArchived: false,
+        viewerDefaultMergeMethod: 'SQUASH',
+        mergeCommitAllowed: false,
+        squashMergeAllowed: true,
+        rebaseMergeAllowed: false,
+        mergeQueue: mergeQueueRepos.includes(
+          `${variables[owner]}/${variables[name]}`,
+        )
+          ? { id: 'MQ_1' }
+          : null,
       },
     ]),
   );
@@ -137,8 +165,13 @@ async function readBody(request: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-function sendJson(response: ServerResponse, body: unknown, headers = {}) {
-  response.writeHead(200, {
+function sendJson(
+  response: ServerResponse,
+  body: unknown,
+  headers = {},
+  status = HTTP_OK,
+) {
+  response.writeHead(status, {
     'content-type': 'application/json',
     'x-oauth-scopes': GRANTED_SCOPES,
     ...headers,
@@ -146,16 +179,90 @@ function sendJson(response: ServerResponse, body: unknown, headers = {}) {
   response.end(JSON.stringify(body));
 }
 
+export interface FakeGithubOptions {
+  mergeQueueRepos?: string[];
+  includeNewPr?: boolean;
+}
+
 export interface FakeGithub {
   url: string;
+  comments(repo: string, number: number): string[];
   publishNewPr(): void;
   holdInbox(): void;
   releaseInbox(): void;
   close(): Promise<void>;
 }
 
-export async function startFakeGithub(): Promise<FakeGithub> {
-  const myPrs: PrSpec[] = [FAILING_PR, WEB_PR];
+export async function startFakeGithub(
+  options: FakeGithubOptions = {},
+): Promise<FakeGithub> {
+  const mergeQueueRepos = options.mergeQueueRepos ?? [];
+  const myPrs: PrSpec[] = [
+    FAILING_PR,
+    WEB_PR,
+    ...(options.includeNewPr ? [NEW_PR] : []),
+  ];
+  const states = new Map<number, PrState>(
+    [FAILING_PR, WEB_PR, NEW_PR].map((spec) => [
+      spec.number,
+      { inMergeQueue: false, comments: [] },
+    ]),
+  );
+  const stateOf = (spec: PrSpec) => states.get(spec.number)!;
+  const removePr = (number: number) => {
+    const index = myPrs.findIndex((spec) => spec.number === number);
+    if (index >= 0) myPrs.splice(index, 1);
+  };
+  const specById = (id: unknown) =>
+    myPrs.find((spec) => `PR_${spec.number}` === id);
+
+  function mutate(request: GraphqlRequest) {
+    const { query, variables = {} } = request;
+    const spec = specById(variables.id);
+    if (query.includes('mutation ClosePullRequest') && spec) {
+      removePr(spec.number);
+      return { closePullRequest: { pullRequest: { id: variables.id } } };
+    }
+    if (query.includes('mutation AddComment') && spec) {
+      const now = new Date().toISOString();
+      stateOf(spec).comments.push({
+        author: { __typename: 'User', login: VIEWER_LOGIN },
+        body: String(variables.body),
+        createdAt: now,
+        updatedAt: now,
+        url: `https://github.com/${spec.repo}/pull/${spec.number}#issuecomment-1`,
+      });
+      return { addComment: { clientMutationId: null } };
+    }
+    return null;
+  }
+
+  function mergeAsync(request: IncomingMessage, response: ServerResponse) {
+    const [, repo, number, uuid] = MERGE_ASYNC.exec(request.url ?? '') ?? [];
+    const spec = myPrs.find((candidate) => candidate.number === Number(number));
+    if (!spec) return sendJson(response, { message: 'Not Found' }, {}, 404);
+    if (uuid) {
+      removePr(spec.number);
+      return sendJson(response, {
+        status: 'merged',
+        details: { message: 'Pull request was merged.', sha: 'abc123' },
+      });
+    }
+    if (mergeQueueRepos.includes(repo)) {
+      stateOf(spec).inMergeQueue = true;
+      return sendJson(response, {
+        status: 'enqueued',
+        details: { message: 'Pull request was added to the merge queue.' },
+      });
+    }
+    return sendJson(
+      response,
+      { status: 'pending', details: { uuid: `merge-${number}` } },
+      {},
+      HTTP_ACCEPTED,
+    );
+  }
+
   let pendingThreadAt: string | null = null;
   let inboxGate: Promise<void> = Promise.resolve();
   let openInboxGate = () => undefined as void;
@@ -169,11 +276,13 @@ export async function startFakeGithub(): Promise<FakeGithub> {
     if (query.includes('query RepoOwners')) {
       return { viewer: { login: VIEWER_LOGIN, organizations: { nodes: [] } } };
     }
+    const mutation = mutate(request);
+    if (mutation) return mutation;
     if (query.includes('query Inbox')) {
       return {
         viewer: { login: VIEWER_LOGIN, avatarUrl: null },
-        ...accessAliases(request),
-        mine: connection(myPrs.map(prNode)),
+        ...accessAliases(request, mergeQueueRepos),
+        mine: connection(myPrs.map((spec) => prNode(spec, stateOf(spec)))),
         reviews: connection([]),
       };
     }
@@ -200,6 +309,8 @@ export async function startFakeGithub(): Promise<FakeGithub> {
   async function handle(request: IncomingMessage, response: ServerResponse) {
     if (request.url?.startsWith('/notifications'))
       return notifications(response);
+    if (MERGE_ASYNC.test(request.url ?? ''))
+      return mergeAsync(request, response);
     if (request.method === 'POST' && request.url === '/graphql') {
       const body = JSON.parse(await readBody(request)) as GraphqlRequest;
       if (body.query.includes('query Inbox')) await inboxGate;
@@ -216,6 +327,8 @@ export async function startFakeGithub(): Promise<FakeGithub> {
 
   return {
     url: `http://${LOCAL_HOST}:${port}`,
+    comments: (_repo, number) =>
+      states.get(number)?.comments.map((comment) => comment.body) ?? [],
     publishNewPr() {
       myPrs.push(NEW_PR);
       pendingThreadAt = new Date().toISOString();

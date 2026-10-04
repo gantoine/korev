@@ -17,6 +17,7 @@ import {
   WEB_REPO,
   startFakeGithub,
   type FakeGithub,
+  type FakeGithubOptions,
 } from './fake-github';
 
 const APP_ENTRY = '.vite/build/main.cjs';
@@ -56,6 +57,18 @@ async function connectAndOpenMyPrs(window: Page) {
   await expect(window.getByText(FAILING_PR_TITLE)).toBeVisible();
 }
 
+function panel(window: Page) {
+  return window.getByRole('complementary', { name: 'Pull request details' });
+}
+
+function confirmDialog(window: Page) {
+  return window.getByRole('dialog');
+}
+
+async function openRow(window: Page, title: string) {
+  await window.getByRole('option', { name: new RegExp(title) }).click();
+}
+
 function repoHeaders(window: Page) {
   return window.locator('[role="option"][aria-expanded]').filter({
     hasText: /^acme\//,
@@ -64,8 +77,9 @@ function repoHeaders(window: Page) {
 
 async function withSession(
   run: (github: FakeGithub, userDataDir: string) => Promise<void>,
+  options: FakeGithubOptions = {},
 ) {
-  const github = await startFakeGithub();
+  const github = await startFakeGithub(options);
   const userDataDir = await mkdtemp(join(tmpdir(), 'korev-e2e-'));
   try {
     await run(github, userDataDir);
@@ -152,4 +166,84 @@ test('groups PRs by repo in the order chosen in Settings, with keyboard collapse
       await app.close();
     }
   });
+});
+
+test('merges a ready PR and closes another after confirming', async () => {
+  await withSession(async (github, userDataDir) => {
+    const app = await launch(github, userDataDir);
+    try {
+      const window = await appWindow(app);
+      await connectAndOpenMyPrs(window);
+
+      await openRow(window, WEB_PR_TITLE);
+      await panel(window)
+        .getByRole('button', { name: /^Merge/ })
+        .click();
+      await expect(confirmDialog(window)).toContainText('Merges #304');
+      await confirmDialog(window)
+        .getByRole('button', { name: /^Merge/ })
+        .click();
+      await expect(window.getByText('Merged #304')).toBeVisible();
+
+      await openRow(window, FAILING_PR_TITLE);
+      await window.keyboard.press('Shift+X');
+      await confirmDialog(window)
+        .getByRole('button', { name: /^Close\s*⌘↵/ })
+        .click();
+      await expect(window.getByText('Closed #491')).toBeVisible();
+      await expect(
+        window.getByRole('button', { name: 'Reopen' }),
+      ).toBeVisible();
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+test("sends PRs to GitHub's merge queue and to Trunk", async () => {
+  await withSession(
+    async (github, userDataDir) => {
+      const app = await launch(github, userDataDir);
+      try {
+        const window = await appWindow(app);
+        await connectAndOpenMyPrs(window);
+
+        await openRow(window, NEW_PR_TITLE);
+        await panel(window)
+          .getByRole('button', { name: /^Add to merge queue/ })
+          .click();
+        await confirmDialog(window)
+          .getByRole('button', { name: /^Add to merge queue/ })
+          .click();
+        await expect(
+          window
+            .getByRole('option', { name: new RegExp(NEW_PR_TITLE) })
+            .getByText('In merge queue'),
+        ).toBeVisible();
+
+        await window.getByRole('button', { name: 'Settings' }).click();
+        await window.getByLabel(`Merge ${WEB_REPO} with`).selectOption('trunk');
+        await window.getByRole('button', { name: /My PRs/ }).click();
+        await openRow(window, WEB_PR_TITLE);
+        await panel(window)
+          .getByRole('button', { name: /^Send to Trunk/ })
+          .click();
+        await expect(confirmDialog(window)).toContainText(
+          'Posts `/trunk merge` on #304.',
+        );
+        await confirmDialog(window)
+          .getByRole('button', { name: /^Send to Trunk/ })
+          .click();
+        await expect(
+          window
+            .getByRole('option', { name: new RegExp(WEB_PR_TITLE) })
+            .getByText('In Trunk queue'),
+        ).toBeVisible();
+        expect(github.comments(WEB_REPO, 304)).toEqual(['/trunk merge']);
+      } finally {
+        await app.close();
+      }
+    },
+    { mergeQueueRepos: [API_REPO], includeNewPr: true },
+  );
 });

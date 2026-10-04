@@ -1,3 +1,4 @@
+import type { PrActionState, QueueStatus, RepoMergeInfo } from './merge';
 import type { PullRequest, StackLayer } from './pull-request';
 
 export type Bucket = 'needs-you' | 'in-progress' | 'ready';
@@ -18,7 +19,9 @@ export type ReasonCode =
   | 'checking-mergeability'
   | 'mergeability-unknown'
   | 'no-checks'
-  | 'ready-to-merge';
+  | 'ready-to-merge'
+  | 'in-queue'
+  | 'removed-from-queue';
 
 export interface Reason {
   code: ReasonCode;
@@ -30,6 +33,7 @@ export interface MyPr {
   pr: PullRequest;
   bucket: Bucket;
   reasons: Reason[];
+  queue: QueueStatus | null;
 }
 
 export type MyStackLayer =
@@ -164,6 +168,8 @@ export interface InboxSnapshot {
   reviews: ReviewRepoGroup[];
   reviewCount: number;
   problems: Problem[];
+  repoMerge: Record<string, RepoMergeInfo>;
+  actions: Record<string, PrActionState>;
   truncated: { mine: boolean; reviews: boolean };
   stacksUnavailable: boolean;
   error: string | null;

@@ -38,6 +38,8 @@ export function makePr(overrides: Partial<PullRequest> = {}): PullRequest {
     reviews: [],
     reviewRequestEvents: [],
     stack: null,
+    isInMergeQueue: false,
+    comments: [],
     ...overrides,
   };
 }

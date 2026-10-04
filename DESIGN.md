@@ -33,6 +33,8 @@ and open `#gallery`).
 | Draft | Only mark shown on a review request row | outline |
 | Approved | Priority column of an "Already approved" row when a person approved | success |
 | Bot approved | Priority column of an "Already approved" row when only bots approved | neutral |
+| Action chip | My PR row while Korev acts on it: "Merging…" (with `loader`), "Still merging on GitHub", "Merge failed" | neutral, or danger for a failure |
+| Queue chip | "In Trunk queue" / "In merge queue" (In progress); "Removed from Trunk queue" (Needs you) | neutral / warning |
 | Repo urgency | Repo header: "2 need you" (My PRs) or "1 P1" (Review requests) | danger, shown only when something is urgent |
 | Stack | Header of a stack group | accent |
 | Sidebar count | My PRs = Needs you count; Review requests = requests waiting | danger when something needs you or a P1 exists, otherwise neutral |
@@ -114,12 +116,36 @@ and open `#gallery`).
   couldn't unlock your saved GitHub sign-in" with Try again and Sign in again, never the
   Connect screen.
 
+## Merge and close
+
+- Only My PRs can merge or close. The side panel footer has one primary button:
+  Merge (labelled for the repo's path) when the PR is ready to merge, Cancel when it
+  is in a queue, otherwise Open on GitHub. Close sits next to it in the danger
+  variant. Rows never carry buttons.
+- Every action asks first. Confirms name PRs by number, never "above" or "below":
+  "Merges #301, #302 and #303", "Includes @alex's #301", "#303 and #304 are built on
+  this and will lose their base." A layer that isn't ready disables Merge and says why
+  ("#301 isn't ready: lint failing"). A stack Korev only partly sees offers Open on
+  GitHub instead.
+- The merge button follows the path: "Merge", "Add to merge queue", "Send to Trunk" /
+  "Send to Mergify" / "Send to Aviator". Comment paths show the comment first: "Posts
+  `/trunk merge` on #303. Your team sees this comment."
+- Merge confirms focus Merge; Close confirms focus Cancel. ⌘↵ confirms, Esc cancels.
+  The merge method radio shows only when the repo allows more than one.
+- Merge and Close stay disabled until the first live sync after launch ("Waiting for
+  GitHub sync").
+- While merging, every layer in the range shows "Merging…" and rows don't move. A merge
+  that fails shows "Merge failed" on the row and GitHub's reason in the panel, and is
+  announced. Success shows the toast "Merged #301–#303". A close leaves the row as
+  "Closed · gone on next refresh" with a "Closed #302" toast that offers Reopen.
+
 ## Keyboard model
 
 - Each list is one `listbox` with roving focus. `j`/`k` or ↓/↑ move between rows,
   across repo headers and sections, and into stack layers.
 - Enter opens the PR, ⌘Enter opens it on GitHub, Esc closes the side panel and returns
-  focus to the row.
+  focus to the row. In My PRs, ⇧M and ⇧X open the merge and close confirms for the
+  selected PR, even with the panel closed.
 - ⌘1 / ⌘2 switch views, ⌘, opens Settings, ⌘R refreshes, `?` shows the shortcut sheet.
 - Single-letter shortcuts are ignored while a text field has focus.
 - Tab order: sidebar → list → panel. Every focusable element shows `--focus-ring` on
