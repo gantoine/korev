@@ -41,6 +41,7 @@ export type ReviewState =
 export interface SubmittedReview {
   login: string;
   state: ReviewState;
+  isBot: boolean;
 }
 
 export type Reviewer =
@@ -50,6 +51,15 @@ export type Reviewer =
 export interface ReviewRequestEvent {
   reviewer: Reviewer;
   createdAt: string;
+}
+
+export interface PrComment {
+  authorLogin: string | null;
+  isBot: boolean;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  url: string;
 }
 
 export interface StackLayer {
@@ -97,4 +107,6 @@ export interface PullRequest {
   reviews: SubmittedReview[];
   reviewRequestEvents: ReviewRequestEvent[];
   stack: StackInfo | null;
+  isInMergeQueue: boolean;
+  comments: PrComment[];
 }

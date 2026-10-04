@@ -1,5 +1,6 @@
 import type { AuthState, LoginState, TokenResult } from './auth';
 import type { InboxSnapshot } from './inbox';
+import type { ActionResult, MergeRequest, MergeTool, PrTarget } from './merge';
 import type { RepoOwner, RepoPage } from './repos';
 import type { InboxView, Settings, ThemePreference } from './settings';
 
@@ -13,10 +14,17 @@ export enum IpcChannel {
   AuthCancelDeviceFlow = 'auth:cancel-device-flow',
   AuthUseToken = 'auth:use-token',
   AuthDisconnect = 'auth:disconnect',
+  AuthRetryUnlock = 'auth:retry-unlock',
   SettingsLoad = 'settings:load',
   SettingsSetRepos = 'settings:set-repos',
   SettingsSetTheme = 'settings:set-theme',
   SettingsSetLastView = 'settings:set-last-view',
+  SettingsSetCollapsedRepos = 'settings:set-collapsed-repos',
+  SettingsSetMergeWith = 'settings:set-merge-with',
+  PrMerge = 'pr:merge',
+  PrClose = 'pr:close',
+  PrReopen = 'pr:reopen',
+  PrCancelQueue = 'pr:cancel-queue',
   SettingsSuggestedRepos = 'settings:suggested-repos',
   SettingsChanged = 'settings:changed',
   ReposOwners = 'repos:owners',
@@ -47,6 +55,7 @@ export interface KorevBridge {
     cancelDeviceFlow(): Promise<void>;
     useToken(token: string): Promise<TokenResult>;
     disconnect(): Promise<void>;
+    retryUnlock(): Promise<void>;
     onChanged(listener: (state: AuthState) => void): Unsubscribe;
   };
   settings: {
@@ -54,6 +63,8 @@ export interface KorevBridge {
     setRepos(repos: string[]): Promise<Settings>;
     setTheme(theme: ThemePreference): Promise<Settings>;
     setLastView(view: InboxView): Promise<Settings>;
+    setCollapsedRepos(view: InboxView, repos: string[]): Promise<Settings>;
+    setMergeWith(repo: string, tool: MergeTool): Promise<Settings>;
     suggestedRepos(): Promise<string[]>;
     onChanged(listener: (settings: Settings) => void): Unsubscribe;
   };
@@ -61,6 +72,12 @@ export interface KorevBridge {
     owners(): Promise<RepoOwner[]>;
     page(owner: string, cursor: string | null): Promise<RepoPage>;
     search(owner: string, term: string): Promise<string[]>;
+  };
+  pr: {
+    merge(request: MergeRequest): Promise<ActionResult>;
+    close(target: PrTarget): Promise<ActionResult>;
+    reopen(target: PrTarget): Promise<ActionResult>;
+    cancelQueue(target: PrTarget): Promise<ActionResult>;
   };
   shell: {
     openGithub(url: string): Promise<void>;

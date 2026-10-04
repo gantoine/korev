@@ -5,7 +5,7 @@ import { daysAgo, hoursAgo, makePr } from './test-fixtures';
 
 const ALICE: Viewer = {
   login: 'alice',
-  teams: [{ org: 'acme', slug: 'frontend' }],
+  teams: [{ org: 'acme', slug: 'frontend', members: ['alice'] }],
 };
 const aliceUser: Reviewer = { kind: 'user', login: 'alice' };
 const bobUser: Reviewer = { kind: 'user', login: 'bob' };

@@ -28,6 +28,7 @@ const bridge: KorevBridge = {
     cancelDeviceFlow: () => invoke(IpcChannel.AuthCancelDeviceFlow),
     useToken: (token) => invoke(IpcChannel.AuthUseToken, token),
     disconnect: () => invoke(IpcChannel.AuthDisconnect),
+    retryUnlock: () => invoke(IpcChannel.AuthRetryUnlock),
     onChanged: (listener) => subscribe(IpcChannel.AuthChanged, listener),
   },
   settings: {
@@ -35,6 +36,10 @@ const bridge: KorevBridge = {
     setRepos: (repos) => invoke(IpcChannel.SettingsSetRepos, repos),
     setTheme: (theme) => invoke(IpcChannel.SettingsSetTheme, theme),
     setLastView: (view) => invoke(IpcChannel.SettingsSetLastView, view),
+    setCollapsedRepos: (view, repos) =>
+      invoke(IpcChannel.SettingsSetCollapsedRepos, view, repos),
+    setMergeWith: (repo, tool) =>
+      invoke(IpcChannel.SettingsSetMergeWith, repo, tool),
     suggestedRepos: () => invoke(IpcChannel.SettingsSuggestedRepos),
     onChanged: (listener) => subscribe(IpcChannel.SettingsChanged, listener),
   },
@@ -42,6 +47,12 @@ const bridge: KorevBridge = {
     owners: () => invoke(IpcChannel.ReposOwners),
     page: (owner, cursor) => invoke(IpcChannel.ReposPage, owner, cursor),
     search: (owner, term) => invoke(IpcChannel.ReposSearch, owner, term),
+  },
+  pr: {
+    merge: (request) => invoke(IpcChannel.PrMerge, request),
+    close: (target) => invoke(IpcChannel.PrClose, target),
+    reopen: (target) => invoke(IpcChannel.PrReopen, target),
+    cancelQueue: (target) => invoke(IpcChannel.PrCancelQueue, target),
   },
   shell: {
     openGithub: (url) => invoke(IpcChannel.ShellOpenGithub, url),

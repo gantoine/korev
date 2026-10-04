@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { SecretCipher } from './encrypted-file';
 import { createMemoryFileSystem } from './file-system';
 import {
   createTokenStore,
   TokenStorageUnavailableError,
-  type SecretCipher,
   type StoredToken,
 } from './token-store';
 
@@ -34,7 +34,7 @@ describe('token store', () => {
     const fs = createMemoryFileSystem();
     const store = createTokenStore({ cipher: fakeCipher(), fs, path: PATH });
     await store.save(STORED);
-    expect(await store.load()).toEqual(STORED);
+    expect(await store.load()).toEqual({ status: 'loaded', token: STORED });
   });
 
   it('refuses to save when the keyring backend is basic_text', async () => {
@@ -47,16 +47,26 @@ describe('token store', () => {
     expect(fs.files.has(PATH)).toBe(false);
   });
 
-  it('treats a decrypt failure as disconnected', async () => {
+  it('reports a token it cannot decrypt as unreadable and keeps the file', async () => {
     const fs = createMemoryFileSystem({ [PATH]: 'garbage' });
     const cipher = fakeCipher({
       decrypt: async () => {
         throw new Error('Keychain refused');
       },
     });
-    expect(
-      await createTokenStore({ cipher, fs, path: PATH }).load(),
-    ).toBeNull();
+    expect(await createTokenStore({ cipher, fs, path: PATH }).load()).toEqual({
+      status: 'unreadable',
+    });
+    expect(fs.files.has(PATH)).toBe(true);
+  });
+
+  it('reports a missing file as missing', async () => {
+    const store = createTokenStore({
+      cipher: fakeCipher(),
+      fs: createMemoryFileSystem(),
+      path: PATH,
+    });
+    expect(await store.load()).toEqual({ status: 'missing' });
   });
 
   it('rewrites the file when the cipher asks to re-encrypt', async () => {

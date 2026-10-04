@@ -3,7 +3,9 @@ import {
   type UnknownMergeStreaks,
   advanceUnknownMergeStreaks,
 } from '../../inbox/merge-streaks';
-import type { Bucket, InboxSnapshot, SyncStatus } from '../../shared/inbox';
+import { sortByRepoOrder } from '../../inbox/repo-order';
+import type { InboxSnapshot, SyncStatus } from '../../shared/inbox';
+import type { MergeTool } from '../../shared/merge';
 import type { GithubClient, InboxResult } from './client';
 import {
   AuthLostError,
@@ -34,6 +36,7 @@ export interface InboxPollerDeps {
   buildInbox(input: InboxInput): Inbox;
   token(): string | null;
   repos(): string[];
+  mergeWith(): Record<string, MergeTool>;
   renameRepos(renames: RepoRename[]): Promise<void>;
   now(): Date;
   scheduler: Scheduler;
@@ -44,6 +47,8 @@ export type TriggerReason = 'manual' | 'focus';
 
 export interface InboxPoller {
   snapshot(): InboxSnapshot;
+  restore(cached: InboxSnapshot): void;
+  rebuild(): void;
   start(): Promise<void>;
   trigger(reason: TriggerReason): Promise<void>;
   restart(): Promise<void>;
@@ -74,8 +79,6 @@ const OFFLINE_FIRST_RETRY_MS = 30 * MS_PER_SECOND;
 const OFFLINE_MAX_RETRY_MS = 5 * MS_PER_MINUTE;
 const OFFLINE_BACKOFF_FACTOR = 2;
 
-const BUCKETS: readonly Bucket[] = ['needs-you', 'in-progress', 'ready'];
-
 const TRIGGER_BLOCKING_STATUSES: ReadonlySet<SyncStatus> = new Set([
   'paused',
   'rate_limited',
@@ -92,12 +95,16 @@ export function emptySnapshot(repoCount = 0): InboxSnapshot {
   return {
     status: 'idle',
     syncedAt: null,
+    fromCache: false,
     viewerLogin: null,
     repoCount,
-    mine: BUCKETS.map((bucket) => ({ bucket, count: 0, entries: [] })),
+    mine: [],
     reviews: [],
     reviewCount: 0,
     problems: [],
+    repoMerge: {},
+    repoAvatars: {},
+    actions: {},
     truncated: { mine: false, reviews: false },
     stacksUnavailable: false,
     error: null,
@@ -150,12 +157,38 @@ class GithubInboxPoller implements InboxPoller {
   #offlineAttempts = 0;
   #lastSyncFinishedAt: number | null = null;
   #dataToken: string | null = null;
+  #lastFetched: InboxResult | null = null;
   #timers: Partial<Record<TimerName, TimerHandle>> = {};
 
   constructor(private readonly deps: InboxPollerDeps) {}
 
   snapshot(): InboxSnapshot {
     return this.#current;
+  }
+
+  restore(cached: InboxSnapshot): void {
+    this.#dataToken = this.deps.token();
+    this.#publish({
+      ...cached,
+      status: 'idle',
+      fromCache: true,
+      error: null,
+      rateLimitResetAt: null,
+      nextRetryAt: null,
+    });
+  }
+
+  rebuild(): void {
+    if (this.#lastFetched) {
+      this.#publish({ ...this.#current, ...this.#build(this.#lastFetched) });
+      return;
+    }
+    const repoOrder = this.deps.repos();
+    this.#publish({
+      ...this.#current,
+      mine: sortByRepoOrder(this.#current.mine, repoOrder),
+      reviews: sortByRepoOrder(this.#current.reviews, repoOrder),
+    });
   }
 
   start(): Promise<void> {
@@ -171,6 +204,7 @@ class GithubInboxPoller implements InboxPoller {
 
   restart(): Promise<void> {
     this.#invalidateInFlight();
+    this.#lastFetched = null;
     this.#session = freshSession();
     this.#offlineAttempts = 0;
     return this.#requestSync();
@@ -178,6 +212,7 @@ class GithubInboxPoller implements InboxPoller {
 
   reset(): void {
     this.#invalidateInFlight();
+    this.#lastFetched = null;
     this.#session = freshSession();
     this.#offlineAttempts = 0;
     this.#dataToken = null;
@@ -285,25 +320,34 @@ class GithubInboxPoller implements InboxPoller {
     this.#session.lastSeenUpdatedAt ??= startedAt.toISOString();
     this.#offlineAttempts = 0;
     this.#dataToken = token;
+    this.#lastFetched = fetched;
     this.#lastSyncFinishedAt = this.deps.now().getTime();
     this.#publish(this.#toSnapshot(fetched, repoCount));
     this.#scheduleLiveTimers();
   }
 
+  #build(fetched: InboxResult) {
+    return {
+      ...this.deps.buildInbox({
+        mine: fetched.mine,
+        reviews: fetched.reviews,
+        viewer: { login: fetched.viewerLogin, teams: fetched.viewerTeams },
+        now: this.deps.now(),
+        unknownMergeStreaks: this.#session.unknownMergeStreaks,
+        repoOrder: this.deps.repos(),
+        mergeWith: this.deps.mergeWith(),
+      }),
+      repoMerge: fetched.repoMerge,
+      repoAvatars: fetched.repoAvatars,
+    };
+  }
+
   #toSnapshot(fetched: InboxResult, repoCount: number): InboxSnapshot {
-    const now = this.deps.now();
-    const built = this.deps.buildInbox({
-      mine: fetched.mine,
-      reviews: fetched.reviews,
-      viewer: { login: fetched.viewerLogin, teams: fetched.viewerTeams },
-      now,
-      unknownMergeStreaks: this.#session.unknownMergeStreaks,
-    });
     return {
       ...emptySnapshot(repoCount),
-      ...built,
+      ...this.#build(fetched),
       status: 'live',
-      syncedAt: now.toISOString(),
+      syncedAt: this.deps.now().toISOString(),
       viewerLogin: fetched.viewerLogin,
       problems: fetched.problems,
       truncated: fetched.truncated,

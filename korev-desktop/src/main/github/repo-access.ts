@@ -1,4 +1,5 @@
 import type { Problem, ProblemKind } from '../../shared/inbox';
+import type { MergeMethod, RepoMergeInfo } from '../../shared/merge';
 import { splitRepoName } from '../repo-names';
 import { accessActionUrl, classifyAccess } from './access';
 import { redactToken } from './errors';
@@ -13,6 +14,8 @@ export interface RepoRename {
 export interface RepoAccessReport {
   problems: Problem[];
   renames: RepoRename[];
+  merge: Record<string, RepoMergeInfo>;
+  avatars: Record<string, string>;
 }
 
 export interface RepoAccessResponse {
@@ -25,6 +28,56 @@ export interface RepoAccessResponse {
 interface RepoAccessNode {
   nameWithOwner: string;
   isArchived: boolean;
+  viewerDefaultMergeMethod?: string | null;
+  mergeCommitAllowed?: boolean;
+  squashMergeAllowed?: boolean;
+  rebaseMergeAllowed?: boolean;
+  mergeQueue?: { id: string } | null;
+  owner?: { avatarUrl?: string } | null;
+}
+
+const MERGE_METHODS: Record<string, MergeMethod> = {
+  MERGE: 'merge',
+  SQUASH: 'squash',
+  REBASE: 'rebase',
+};
+
+function toMergeInfo(node: RepoAccessNode): RepoMergeInfo {
+  const allowed: [MergeMethod, boolean | undefined][] = [
+    ['merge', node.mergeCommitAllowed],
+    ['squash', node.squashMergeAllowed],
+    ['rebase', node.rebaseMergeAllowed],
+  ];
+  return {
+    defaultMethod: MERGE_METHODS[node.viewerDefaultMergeMethod ?? ''] ?? null,
+    allowedMethods: allowed.filter(([, on]) => on).map(([method]) => method),
+    hasMergeQueue: Boolean(node.mergeQueue),
+  };
+}
+
+function avatarsByRepo(
+  targets: RepoAccessTarget[],
+  data: object,
+): Record<string, string> {
+  return Object.fromEntries(
+    targets.flatMap((target) => {
+      const node = accessNode(target, data);
+      const avatarUrl = node?.owner?.avatarUrl;
+      return node && avatarUrl ? [[node.nameWithOwner, avatarUrl]] : [];
+    }),
+  );
+}
+
+function mergeInfoByRepo(
+  targets: RepoAccessTarget[],
+  data: object,
+): Record<string, RepoMergeInfo> {
+  return Object.fromEntries(
+    targets.flatMap((target) => {
+      const node = accessNode(target, data);
+      return node ? [[node.nameWithOwner, toMergeInfo(node)]] : [];
+    }),
+  );
 }
 
 const ACCESS_MESSAGES: Record<
@@ -51,6 +104,8 @@ export function readRepoAccess(
     renames: presentValues(
       targets.map((target) => targetRename(target, response.data)),
     ),
+    merge: mergeInfoByRepo(targets, response.data),
+    avatars: avatarsByRepo(targets, response.data),
   };
 }
 

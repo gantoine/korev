@@ -1,9 +1,15 @@
 import { Badge, SizeBadge, cn } from '../../design-system';
-import type { ReviewItem, ReviewRequest } from '../../shared/inbox';
+import type {
+  Approval,
+  ApprovedReview,
+  ReviewItem,
+  ReviewRequest,
+} from '../../shared/inbox';
 import { formatAge, joinMeta, pluralize } from '../format';
 import { NARROW_HIDDEN } from '../layout';
 import { MINUTE_MS, useNow } from '../useNow';
 import { CiIcon } from './CiIcon';
+import { approvedKey } from './entries';
 import { REVIEW_GRID, REVIEW_LAYER_GRID } from './grid';
 import {
   LayerLabel,
@@ -36,36 +42,51 @@ function blocksNote(blocksLayers: number): string | null {
   return `blocks ${pluralize(blocksLayers, 'layer')}`;
 }
 
-function reviewMeta(item: ReviewItem, now: number, inStack: boolean): string {
+function reviewMeta(item: ReviewItem, now: number): string {
   const { pr } = item;
   return joinMeta([
     authorHandle(pr.authorLogin),
-    inStack ? `#${pr.number}` : prRef(pr),
+    `#${pr.number}`,
     ...requestTiming(item, now),
     blocksNote(item.blocksLayers),
   ]);
 }
 
-export interface ReviewRowProps {
-  item: ReviewItem;
-  stackPlace?: StackPlace;
+export function approvalText(approval: Approval): string {
+  switch (approval.kind) {
+    case 'you':
+      return 'You approved';
+    case 'teammate':
+      return `Approved by @${approval.login}`;
+    case 'bot':
+      return `Approved by bot @${approval.login}`;
+    default:
+      return 'Approved';
+  }
 }
 
-export function ReviewRow({ item, stackPlace }: ReviewRowProps) {
-  const now = useNow(MINUTE_MS);
-  const { pr, size, priority } = item;
+export function ApprovalBadge({ approval }: { approval: Approval }) {
+  if (approval.kind === 'bot') return <Badge>Bot approved</Badge>;
+  return <Badge tone="success">Approved</Badge>;
+}
+
+function approvedMeta({ item, approval }: ApprovedReview): string {
+  return joinMeta([
+    authorHandle(item.pr.authorLogin),
+    `#${item.pr.number}`,
+    requestSource(item.request),
+    approvalText(approval),
+  ]);
+}
+
+interface ReviewColumnsProps {
+  item: ReviewItem;
+}
+
+function ReviewColumns({ item }: ReviewColumnsProps) {
+  const { pr, size } = item;
   return (
-    <PrRow
-      optionKey={prRef(pr)}
-      url={pr.url}
-      className={stackPlace ? REVIEW_LAYER_GRID : REVIEW_GRID}
-    >
-      {stackPlace ? <LayerLabel {...stackPlace} /> : null}
-      <PriorityBadge priority={priority} />
-      <PrSummary
-        title={pr.title}
-        meta={reviewMeta(item, now, Boolean(stackPlace))}
-      />
+    <>
       <span
         className={cn('text-right font-mono text-xs text-fg-2', NARROW_HIDDEN)}
       >
@@ -75,6 +96,41 @@ export function ReviewRow({ item, stackPlace }: ReviewRowProps) {
       <SizeBadge {...size} />
       <span>{pr.isDraft ? <Badge outline>Draft</Badge> : null}</span>
       <CiIcon state={pr.ci} checks={pr.checks} />
+    </>
+  );
+}
+
+export interface ReviewRowProps {
+  item: ReviewItem;
+  stackPlace?: StackPlace;
+}
+
+export function ReviewRow({ item, stackPlace }: ReviewRowProps) {
+  const now = useNow(MINUTE_MS);
+  const { pr, priority } = item;
+  return (
+    <PrRow
+      optionKey={prRef(pr)}
+      url={pr.url}
+      className={stackPlace ? REVIEW_LAYER_GRID : REVIEW_GRID}
+    >
+      {stackPlace ? <LayerLabel {...stackPlace} /> : null}
+      <PriorityBadge priority={priority} />
+      <PrSummary title={pr.title} meta={reviewMeta(item, now)} />
+      <ReviewColumns item={item} />
+    </PrRow>
+  );
+}
+
+export function ApprovedRow({ approved }: { approved: ApprovedReview }) {
+  const { pr } = approved.item;
+  return (
+    <PrRow optionKey={approvedKey(pr)} url={pr.url} className={REVIEW_GRID}>
+      <span>
+        <ApprovalBadge approval={approved.approval} />
+      </span>
+      <PrSummary title={pr.title} meta={approvedMeta(approved)} />
+      <ReviewColumns item={approved.item} />
     </PrRow>
   );
 }

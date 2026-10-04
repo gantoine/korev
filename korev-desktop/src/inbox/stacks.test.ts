@@ -44,6 +44,7 @@ function myPr(
         severity: SEVERITY_BY_BUCKET[bucket],
       },
     ],
+    queue: null,
   };
 }
 

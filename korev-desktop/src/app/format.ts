@@ -1,7 +1,7 @@
 import { MINUTE_MS, SECOND_MS } from './useNow';
 
 const HOUR_MS = 60 * MINUTE_MS;
-const DAY_MS = 24 * HOUR_MS;
+export const DAY_MS = 24 * HOUR_MS;
 const SECONDS_PER_MINUTE = 60;
 
 const AGE_UNITS: { size: number; suffix: string }[] = [
@@ -15,6 +15,8 @@ const CLOCK_FORMAT: Intl.DateTimeFormatOptions = {
   minute: '2-digit',
   hourCycle: 'h23',
 };
+
+const WEEKDAY_FORMAT: Intl.DateTimeFormatOptions = { weekday: 'short' };
 
 export function pluralize(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
@@ -42,6 +44,19 @@ export function formatSynced(iso: string, now: number): string {
 
 export function formatClock(iso: string): string {
   return new Date(iso).toLocaleTimeString([], CLOCK_FORMAT);
+}
+
+export function formatWeekday(iso: string): string {
+  return new Date(iso).toLocaleDateString([], WEEKDAY_FORMAT);
+}
+
+function isSameDay(iso: string, now: number): boolean {
+  return new Date(iso).toDateString() === new Date(now).toDateString();
+}
+
+export function formatDataTime(iso: string, now: number): string {
+  const clock = formatClock(iso);
+  return isSameDay(iso, now) ? clock : `${formatWeekday(iso)} ${clock}`;
 }
 
 export function formatCountdown(remainingMs: number): string {

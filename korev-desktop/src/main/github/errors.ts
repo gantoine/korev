@@ -59,6 +59,7 @@ export class GithubHttpError extends GithubError {
     message: string,
     readonly status: number,
     readonly code: string | null,
+    readonly body: unknown = null,
   ) {
     super(message);
   }

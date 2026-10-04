@@ -1,5 +1,5 @@
 import type { PullRequest, StackLayer } from '../../shared/pull-request';
-import { prRef } from './pr-ref';
+import { prRef } from '../../shared/pr-ref';
 import type { Placement } from './structure';
 
 export interface ItemShape {
@@ -22,6 +22,9 @@ export type EntryShape<Item, Stack> =
 
 const STACK_GROUP_SEPARATOR = '>';
 const TOGGLE_KEY_PREFIX = 'toggle:';
+const REPO_TOGGLE_PREFIX = 'repo:';
+const APPROVED_TOGGLE_PREFIX = 'approved-section:';
+const APPROVED_KEY_PREFIX = 'approved:';
 
 export function layerRef(repo: string, layer: StackLayer): string {
   return prRef({ repo, number: layer.number });
@@ -41,6 +44,18 @@ export function toggleKey(stackId: string): string {
 
 export function isToggleKey(key: string): boolean {
   return key.startsWith(TOGGLE_KEY_PREFIX);
+}
+
+export function repoToggleKey(repo: string): string {
+  return toggleKey(`${REPO_TOGGLE_PREFIX}${repo}`);
+}
+
+export function approvedToggleKey(repo: string): string {
+  return toggleKey(`${APPROVED_TOGGLE_PREFIX}${repo}`);
+}
+
+export function approvedKey(pr: { repo: string; number: number }): string {
+  return `${APPROVED_KEY_PREFIX}${prRef(pr)}`;
 }
 
 function stackPlacements<Item extends ItemShape>(

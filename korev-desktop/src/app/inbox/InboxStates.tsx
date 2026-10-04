@@ -43,6 +43,20 @@ export function SkeletonRows({ count }: { count: number }) {
   ));
 }
 
+const REPO_SKELETON_ROWS = [3, 2];
+
+export function RepoSkeletons() {
+  return REPO_SKELETON_ROWS.map((rows, index) => (
+    <div key={index}>
+      <div className="flex h-9 items-center gap-2 border-b border-border-1 px-5">
+        <Skeleton className="h-3 w-28" />
+        <Skeleton className="h-2.5 w-10" />
+      </div>
+      <SkeletonRows count={rows} />
+    </div>
+  ));
+}
+
 export function LoadingList({ children }: { children: ReactNode }) {
   return (
     <div aria-busy="true" aria-label="Loading pull requests" className="pb-6">

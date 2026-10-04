@@ -18,7 +18,8 @@ export function useHeldSnapshot(
   holding: boolean,
 ): HeldSnapshot {
   const [base, setBase] = useState(incoming);
-  if (!holding && base !== incoming) setBase(incoming);
+  const mayHold = holding && !base.fromCache;
+  if (!mayHold && base !== incoming) setBase(incoming);
   const structuralChanges = useMemo(
     () =>
       changeCount(
@@ -26,7 +27,7 @@ export function useHeldSnapshot(
       ),
     [model, base, incoming],
   );
-  const pendingCount = holding ? structuralChanges : 0;
+  const pendingCount = mayHold ? structuralChanges : 0;
   const isHolding = pendingCount > 0;
   const displayed = useMemo(
     () => (isHolding ? model.refresh(base, incoming) : incoming),

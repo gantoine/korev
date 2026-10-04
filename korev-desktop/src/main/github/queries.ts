@@ -3,6 +3,8 @@ import {
   CHECK_CONTEXTS_LIMIT,
   FILES_LIMIT,
   LATEST_REVIEWS_LIMIT,
+  PR_COMMENTS_LIMIT,
+  REPO_AVATAR_SIZE,
   ORGANIZATIONS_LIMIT,
   REVIEW_REQUESTS_LIMIT,
   REPO_PAGE_SIZE,
@@ -12,6 +14,7 @@ import {
   STACK_ENTRIES_LIMIT,
   SUGGESTED_REPOS_SEARCH_SIZE,
   TEAMS_LIMIT,
+  TEAM_MEMBERS_LIMIT,
   TIMELINE_EVENTS_LIMIT,
 } from './config';
 
@@ -42,7 +45,10 @@ export type OwnerQualifier = 'org' | 'user';
 const REPO_ALIAS_PREFIX = 'repo';
 const OWNER_VARIABLE_PREFIX = 'owner';
 const NAME_VARIABLE_PREFIX = 'name';
-const REPO_ACCESS_FIELDS = 'nameWithOwner viewerPermission isArchived';
+const REPO_ACCESS_FIELDS = `nameWithOwner viewerPermission isArchived
+    viewerDefaultMergeMethod mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed
+    mergeQueue { id }
+    owner { avatarUrl(size: ${REPO_AVATAR_SIZE}) }`;
 const IN_NAME_QUALIFIER = 'in:name';
 
 export type InboxQueryVariables = {
@@ -161,7 +167,7 @@ fragment PrCore on PullRequest {
     }
   }
   latestReviews(first: ${LATEST_REVIEWS_LIMIT}) {
-    nodes { author { login } state }
+    nodes { author { __typename login } state }
   }
   ${includeStacks ? STACK_FIELDS : ''}
 }`;
@@ -170,7 +176,11 @@ fragment PrCore on PullRequest {
 const MY_PR_FRAGMENT = `
 fragment MyPrFields on PullRequest {
   ...PrCore
+  isInMergeQueue
   reviewThreads(first: ${REVIEW_THREADS_LIMIT}) { ${REVIEW_THREAD_CONNECTION} }
+  comments(last: ${PR_COMMENTS_LIMIT}) {
+    nodes { author { __typename login } body createdAt updatedAt url }
+  }
 }`;
 
 const REVIEW_REQUEST_FRAGMENT = `
@@ -244,7 +254,12 @@ query ViewerTeams($login: String!) {
     organizations(first: ${ORGANIZATIONS_LIMIT}) {
       nodes {
         login
-        teams(first: ${TEAMS_LIMIT}, userLogins: [$login]) { nodes { slug } }
+        teams(first: ${TEAMS_LIMIT}, userLogins: [$login]) {
+          nodes {
+            slug
+            members(first: ${TEAM_MEMBERS_LIMIT}) { nodes { login } }
+          }
+        }
       }
     }
   }

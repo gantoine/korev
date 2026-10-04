@@ -1,3 +1,5 @@
+import type { MergeTool } from './merge';
+
 export type ThemePreference = 'system' | 'light' | 'dark';
 
 export type InboxView = 'review' | 'mine';
@@ -9,11 +11,15 @@ export interface WindowBounds {
   height: number;
 }
 
+export type CollapsedRepos = Record<InboxView, string[]>;
+
 export interface Settings {
   repos: string[];
   theme: ThemePreference;
   lastView: InboxView;
   windowBounds: WindowBounds | null;
+  collapsedRepos: CollapsedRepos;
+  mergeWith: Record<string, MergeTool>;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -21,4 +27,6 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   lastView: 'review',
   windowBounds: null,
+  collapsedRepos: { review: [], mine: [] },
+  mergeWith: {},
 };

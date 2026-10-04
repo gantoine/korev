@@ -1,14 +1,22 @@
 import {
   DEFAULT_SETTINGS,
+  type CollapsedRepos,
   type InboxView,
   type Settings,
   type ThemePreference,
   type WindowBounds,
 } from '../shared/settings';
+import type { MergeTool } from '../shared/merge';
 import type { FileSystem } from './file-system';
 import { isRepoName } from './repo-names';
 
 const THEMES: readonly ThemePreference[] = ['system', 'light', 'dark'];
+const MERGE_TOOLS: readonly MergeTool[] = [
+  'github',
+  'trunk',
+  'mergify',
+  'aviator',
+];
 const VIEWS: readonly InboxView[] = ['review', 'mine'];
 const CORRUPT_SETTINGS_PROBLEM = 'Settings were reset';
 
@@ -26,6 +34,24 @@ export interface SettingsStore {
 function pickRepos(value: unknown): string[] {
   if (!Array.isArray(value)) return DEFAULT_SETTINGS.repos;
   return [...new Set(value.filter(isRepoName))];
+}
+
+function pickCollapsedRepos(value: unknown): CollapsedRepos {
+  const raw = (value ?? {}) as Partial<Record<InboxView, unknown>>;
+  return {
+    review: pickRepos(raw.review),
+    mine: pickRepos(raw.mine),
+  };
+}
+
+function pickMergeWith(value: unknown): Record<string, MergeTool> {
+  if (!value || typeof value !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      ([repo, tool]) =>
+        isRepoName(repo) && MERGE_TOOLS.includes(tool as MergeTool),
+    ),
+  );
 }
 
 function pickOneOf<T>(options: readonly T[], value: unknown, fallback: T): T {
@@ -49,6 +75,8 @@ function sanitize(raw: Record<string, unknown>): Settings {
     theme: pickOneOf(THEMES, raw.theme, DEFAULT_SETTINGS.theme),
     lastView: pickOneOf(VIEWS, raw.lastView, DEFAULT_SETTINGS.lastView),
     windowBounds: pickBounds(raw.windowBounds),
+    collapsedRepos: pickCollapsedRepos(raw.collapsedRepos),
+    mergeWith: pickMergeWith(raw.mergeWith),
   };
 }
 

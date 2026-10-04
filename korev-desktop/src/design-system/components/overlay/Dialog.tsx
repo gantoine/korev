@@ -25,10 +25,12 @@ export function Dialog({
   useEffect(() => {
     if (!open || !onClose) return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      onClose();
     };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
+    window.addEventListener('keydown', closeOnEscape, true);
+    return () => window.removeEventListener('keydown', closeOnEscape, true);
   }, [open, onClose]);
 
   if (!open) return null;

@@ -1,12 +1,19 @@
 import type { AuthState } from '../shared/auth';
 import type {
+  ApprovedReview,
   InboxSnapshot,
   MyPr,
+  MyStack,
   Priority,
   ReviewItem,
   ReviewRequest,
+  ReviewStack,
 } from '../shared/inbox';
-import type { PullRequest, StackLayer } from '../shared/pull-request';
+import type {
+  PullRequest,
+  StackInfo,
+  StackLayer,
+} from '../shared/pull-request';
 import type { RepoOwner, RepoPage } from '../shared/repos';
 import { DEFAULT_SETTINGS, type Settings } from '../shared/settings';
 
@@ -46,6 +53,8 @@ export function makePr(
     reviews: [],
     reviewRequestEvents: [],
     stack: null,
+    isInMergeQueue: false,
+    comments: [],
     ...overrides,
   };
 }
@@ -83,28 +92,50 @@ const RATE_LIMIT_PR: MyPr = {
   }),
   bucket: 'needs-you',
   reasons: FAILING_CHECKS,
+  queue: null,
 };
 
-const LINT_PR: MyPr = {
+const WEB_STACK_LAYERS: StackLayer[] = [
+  layer(1, 302, 'App shell', { state: 'MERGED' }),
+  layer(2, 303, 'IPC bridge and token store', { authorLogin: 'alex' }),
+  layer(3, 304, 'Settings: org access states'),
+  layer(4, 305, 'Settings: repo picker UI'),
+];
+
+function webStackAt(position: number): StackInfo {
+  return {
+    id: 'STACK_web',
+    size: 4,
+    baseRefName: 'main',
+    position,
+    layers: WEB_STACK_LAYERS,
+  };
+}
+
+export const LINT_PR: MyPr = {
   pr: makePr(304, 'Settings: org access states', {
     repo: 'acme/web',
     ci: 'failing',
+    stack: webStackAt(3),
   }),
   bucket: 'needs-you',
   reasons: [
     { code: 'checks-failing', label: 'Lint failing', severity: 'danger' },
   ],
+  queue: null,
 };
 
-const PICKER_PR: MyPr = {
+export const PICKER_PR: MyPr = {
   pr: makePr(305, 'Settings: repo picker UI', {
     repo: 'acme/web',
     ci: 'running',
+    stack: webStackAt(4),
   }),
   bucket: 'in-progress',
   reasons: [
     { code: 'checks-pending', label: 'CI running', severity: 'neutral' },
   ],
+  queue: null,
 };
 
 const EXPORTER_PR: MyPr = {
@@ -113,14 +144,16 @@ const EXPORTER_PR: MyPr = {
   reasons: [
     { code: 'checks-pending', label: 'CI running', severity: 'neutral' },
   ],
+  queue: null,
 };
 
-const OTEL_PR: MyPr = {
+export const OTEL_PR: MyPr = {
   pr: makePr(480, 'Bump OpenTelemetry to 1.31'),
   bucket: 'ready',
   reasons: [
     { code: 'ready-to-merge', label: 'Ready to merge', severity: 'success' },
   ],
+  queue: null,
 };
 
 function priority(tier: Priority['tier'], reasons: string[]): Priority {
@@ -188,89 +221,132 @@ export const SPIKE_REVIEW = review(
   },
 );
 
+const WEB_STACK: MyStack = {
+  id: 'STACK_web',
+  repo: 'acme/web',
+  baseRefName: 'main',
+  size: 4,
+  openCount: 3,
+  partial: false,
+  bucket: 'needs-you',
+  headline: 'Needs you: #304 lint failing',
+  layers: [
+    { kind: 'mine', position: 4, item: PICKER_PR },
+    { kind: 'mine', position: 3, item: LINT_PR },
+    {
+      kind: 'other',
+      position: 2,
+      layer: layer(2, 303, 'IPC bridge and token store', {
+        authorLogin: 'alex',
+      }),
+    },
+    {
+      kind: 'other',
+      position: 1,
+      layer: layer(1, 302, 'App shell', { state: 'MERGED' }),
+    },
+  ],
+};
+
+const ENGINE_STACK: ReviewStack = {
+  id: 'STACK_engine',
+  repo: 'acme/web',
+  baseRefName: 'main',
+  size: 4,
+  requestedCount: 2,
+  partial: false,
+  layers: [
+    {
+      kind: 'other',
+      position: 1,
+      layer: layer(1, 297, 'Query engine: types', { state: 'MERGED' }),
+    },
+    { kind: 'requested', position: 2, item: PLANNER_REVIEW },
+    { kind: 'requested', position: 3, item: DASHBOARDS_REVIEW },
+    {
+      kind: 'other',
+      position: 4,
+      layer: layer(4, 300, 'Query engine: cleanup'),
+    },
+  ],
+};
+
+export const APPROVED_REVIEW: ApprovedReview = {
+  item: review(
+    makePr(312, 'Cache warehouse schemas', {
+      repo: 'acme/web',
+      authorLogin: 'li',
+    }),
+    { request: { ...DIRECT_REQUEST, direct: false, team: '@acme/frontend' } },
+  ),
+  approval: { kind: 'teammate', login: 'sakce' },
+};
+
 export function makeSnapshot(
   overrides: Partial<InboxSnapshot> = {},
 ): InboxSnapshot {
   return {
     status: 'live',
     syncedAt: SYNCED_AT,
+    fromCache: false,
     viewerLogin: 'octocat',
     repoCount: 4,
     mine: [
       {
-        bucket: 'needs-you',
-        count: 2,
-        entries: [
-          { kind: 'pr', item: RATE_LIMIT_PR },
+        repo: 'acme/api',
+        sections: [
           {
-            kind: 'stack',
-            stack: {
-              id: 'STACK_web',
-              repo: 'acme/web',
-              baseRefName: 'main',
-              size: 4,
-              openCount: 3,
-              partial: false,
-              bucket: 'needs-you',
-              headline: 'Needs you: #304 lint failing',
-              layers: [
-                { kind: 'mine', position: 4, item: PICKER_PR },
-                { kind: 'mine', position: 3, item: LINT_PR },
-                {
-                  kind: 'other',
-                  position: 2,
-                  layer: layer(2, 303, 'IPC bridge and token store', {
-                    authorLogin: 'alex',
-                  }),
-                },
-                {
-                  kind: 'other',
-                  position: 1,
-                  layer: layer(1, 302, 'App shell', { state: 'MERGED' }),
-                },
-              ],
-            },
+            bucket: 'needs-you',
+            count: 1,
+            entries: [{ kind: 'pr', item: RATE_LIMIT_PR }],
+          },
+          {
+            bucket: 'in-progress',
+            count: 1,
+            entries: [{ kind: 'pr', item: EXPORTER_PR }],
+          },
+          {
+            bucket: 'ready',
+            count: 1,
+            entries: [{ kind: 'pr', item: OTEL_PR }],
           },
         ],
       },
       {
-        bucket: 'in-progress',
-        count: 1,
-        entries: [{ kind: 'pr', item: EXPORTER_PR }],
+        repo: 'acme/web',
+        sections: [
+          {
+            bucket: 'needs-you',
+            count: 2,
+            entries: [{ kind: 'stack', stack: WEB_STACK }],
+          },
+          { bucket: 'in-progress', count: 0, entries: [] },
+          { bucket: 'ready', count: 0, entries: [] },
+        ],
       },
-      { bucket: 'ready', count: 1, entries: [{ kind: 'pr', item: OTEL_PR }] },
     ],
     reviews: [
-      { kind: 'pr', item: INVOICE_REVIEW },
       {
-        kind: 'stack',
-        stack: {
-          id: 'STACK_engine',
-          repo: 'acme/web',
-          baseRefName: 'main',
-          size: 4,
-          requestedCount: 2,
-          partial: false,
-          layers: [
-            {
-              kind: 'other',
-              position: 1,
-              layer: layer(1, 297, 'Query engine: types', { state: 'MERGED' }),
-            },
-            { kind: 'requested', position: 2, item: PLANNER_REVIEW },
-            { kind: 'requested', position: 3, item: DASHBOARDS_REVIEW },
-            {
-              kind: 'other',
-              position: 4,
-              layer: layer(4, 300, 'Query engine: cleanup'),
-            },
-          ],
-        },
+        repo: 'acme/api',
+        entries: [{ kind: 'pr', item: SPIKE_REVIEW }],
+        approved: [],
       },
-      { kind: 'pr', item: SPIKE_REVIEW },
+      {
+        repo: 'acme/web',
+        entries: [{ kind: 'stack', stack: ENGINE_STACK }],
+        approved: [],
+      },
+      {
+        repo: 'acme/billing',
+        entries: [{ kind: 'pr', item: INVOICE_REVIEW }],
+        approved: [],
+      },
     ],
     reviewCount: 4,
     problems: [],
+    repoMerge: {},
+    repoAvatars: {},
+    actions: {},
     truncated: { mine: false, reviews: false },
     stacksUnavailable: false,
     error: null,
@@ -284,12 +360,14 @@ export const CONNECTED_AUTH: AuthState = {
   connection: { login: 'octocat', avatarUrl: null, method: 'oauth' },
   login: { status: 'idle' },
   storageProblem: null,
+  unlockFailures: 0,
 };
 
 export const DISCONNECTED_AUTH: AuthState = {
   connection: null,
   login: { status: 'idle' },
   storageProblem: null,
+  unlockFailures: 0,
 };
 
 export const WATCHING_SETTINGS: Settings = {

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { InboxSnapshot, SyncStatus } from '../shared/inbox';
+import type { PrActionState } from '../shared/merge';
 import { pluralize } from './format';
-import { prRef } from './inbox/pr-ref';
+import { prRef } from '../shared/pr-ref';
 import { requestedItems } from './inbox/selectors';
 
 const QUIET_STATUSES: SyncStatus[] = ['idle', 'syncing'];
@@ -54,6 +55,26 @@ function newRequestsMessage(
   return pluralize(added.length, 'new review request');
 }
 
+const FAILURE_WORDS: Partial<Record<PrActionState['kind'], string>> = {
+  'merge-failed': 'Merge failed',
+  'close-failed': 'Close failed',
+};
+
+function failureMessage(
+  previous: InboxSnapshot | null,
+  next: InboxSnapshot | null,
+): string | null {
+  if (!next) return null;
+  const fresh = Object.entries(next.actions).find(
+    ([key, state]) =>
+      FAILURE_WORDS[state.kind] && previous?.actions[key]?.kind !== state.kind,
+  );
+  if (!fresh) return null;
+  const [, state] = fresh;
+  const reason = 'message' in state ? state.message : '';
+  return `${FAILURE_WORDS[state.kind]}: ${reason}`;
+}
+
 function nextTracked(
   tracked: Tracked,
   snapshot: InboxSnapshot | null,
@@ -62,6 +83,7 @@ function nextTracked(
   const parts = [
     statusMessage(tracked.settled, settled),
     newRequestsMessage(tracked.snapshot, snapshot),
+    failureMessage(tracked.snapshot, snapshot),
   ].filter(Boolean);
   return {
     snapshot,

@@ -1,16 +1,25 @@
 import { join } from 'node:path';
-import type { AuthState } from '../shared/auth';
+import type { AuthState, Connection } from '../shared/auth';
 import type { InboxSnapshot } from '../shared/inbox';
+import type { ActionResult } from '../shared/merge';
 import { IpcChannel } from '../shared/ipc-contract';
 import type { RepoOwner, RepoPage } from '../shared/repos';
 import type { InboxView, Settings, ThemePreference } from '../shared/settings';
 import { buildInbox } from '../inbox/build-inbox';
+import { parseMergeRequest, parseMergeTool, parseTarget } from './action-input';
 import { isGithubUrl } from './app-origin';
 import { createAuthService } from './auth-service';
+import type { SecretCipher } from './encrypted-file';
 import type { FileSystem } from './file-system';
 import { DeviceFlowLogin } from './github/auth';
 import { createGithubClient } from './github/client';
-import { createInboxPoller, type InboxPoller } from './github/inbox-poller';
+import {
+  createInboxPoller,
+  type InboxPoller,
+  type Scheduler,
+} from './github/inbox-poller';
+import { createGithubWriter } from './github/mutations';
+import { createPrActions } from './github/pr-actions';
 import {
   GITHUB_OAUTH_CLIENT_ID,
   GITHUB_OAUTH_SCOPES,
@@ -19,16 +28,27 @@ import {
 import { applyRenames, type RepoRename } from './github/repo-access';
 import { emptyRepoPage } from './github/repo-picker';
 import type { FetchLike } from './github/request';
+import { createInboxCache } from './inbox-cache';
 import type { IpcHandlers } from './ipc';
 import {
   createSettingsStore,
   notifyOnChange,
   type SettingsStore,
 } from './settings-store';
-import { createTokenStore, type SecretCipher } from './token-store';
+import { createTokenStore } from './token-store';
 
 const SETTINGS_FILE = 'settings.json';
 const TOKEN_FILE = 'github-token.bin';
+const INBOX_CACHE_FILE = 'inbox-cache.bin';
+const INVALID_ACTION: ActionResult = {
+  ok: false,
+  message: 'Korev could not read that request.',
+};
+
+const timers: Scheduler = {
+  setTimeout: (callback, milliseconds) => setTimeout(callback, milliseconds),
+  clearTimeout: (handle) => clearTimeout(handle),
+};
 
 export interface KorevDeps {
   userDataPath: string;
@@ -53,6 +73,13 @@ export interface Korev {
   start(): Promise<void>;
 }
 
+function sameRepoSet(left: string[], right: string[]): boolean {
+  const rightSet = new Set(right);
+  return (
+    left.length === right.length && left.every((repo) => rightSet.has(repo))
+  );
+}
+
 export function createKorev(deps: KorevDeps): Korev {
   const settings = notifyOnChange(
     createSettingsStore({
@@ -66,6 +93,11 @@ export function createKorev(deps: KorevDeps): Korev {
     fs: deps.fs,
     path: join(deps.userDataPath, TOKEN_FILE),
   });
+  const inboxCache = createInboxCache({
+    cipher: deps.cipher,
+    fs: deps.fs,
+    path: join(deps.userDataPath, INBOX_CACHE_FILE),
+  });
   const github = createGithubClient({
     fetch: deps.fetch,
     apiUrl: deps.github.apiUrl,
@@ -76,14 +108,25 @@ export function createKorev(deps: KorevDeps): Korev {
     buildInbox,
     token: () => auth.token(),
     repos: () => settings.current().repos,
+    mergeWith: () => settings.current().mergeWith,
     renameRepos: followRepoRenames,
     now: () => new Date(),
-    scheduler: {
-      setTimeout: (callback, milliseconds) =>
-        setTimeout(callback, milliseconds),
-      clearTimeout: (handle) => clearTimeout(handle),
-    },
-    publish: (snapshot) => deps.broadcast(IpcChannel.InboxUpdated, snapshot),
+    scheduler: timers,
+    publish: publishInbox,
+  });
+
+  const prActions = createPrActions({
+    writer: createGithubWriter({
+      fetch: deps.fetch,
+      apiUrl: deps.github.apiUrl,
+    }),
+    token: () => auth.token(),
+    repoMerge: (repo) => inbox.snapshot().repoMerge[repo],
+    mergeWith: (repo) => settings.current().mergeWith[repo] ?? 'github',
+    now: () => Date.now(),
+    scheduler: timers,
+    onChange: () => broadcastInbox(inbox.snapshot()),
+    refresh: () => void inbox.trigger('manual'),
   });
 
   const auth = createAuthService({
@@ -100,16 +143,53 @@ export function createKorev(deps: KorevDeps): Korev {
         onToken,
       }),
     onStateChange: (state) => deps.broadcast(IpcChannel.AuthChanged, state),
-    onConnectionChange: (connection) => {
-      github.clearSessionCache();
-      if (connection) void inbox.restart();
-      else inbox.reset();
-    },
+    onConnectionChange: followConnection,
+    warn: deps.warn,
   });
 
-  async function setRepos(repos: string[]): Promise<Settings> {
-    const updated = await settings.update({ repos });
+  function withActions(snapshot: InboxSnapshot): InboxSnapshot {
+    return { ...snapshot, actions: prActions.state() };
+  }
+
+  function broadcastInbox(snapshot: InboxSnapshot): void {
+    deps.broadcast(IpcChannel.InboxUpdated, withActions(snapshot));
+  }
+
+  function publishInbox(snapshot: InboxSnapshot): void {
+    if (snapshot.status === 'live') prActions.reconcile(snapshot);
+    broadcastInbox(snapshot);
+    if (snapshot.status !== 'live') return;
+    inboxCache.save(snapshot).catch((error: unknown) => {
+      deps.warn(`Could not cache the inbox: ${String(error)}`);
+    });
+  }
+
+  async function restoreCachedInbox(): Promise<void> {
+    const login = auth.state().connection?.login;
+    if (!login) return;
+    const cached = await inboxCache.load(login).catch((error: unknown) => {
+      deps.warn(`Could not read the cached inbox: ${String(error)}`);
+      return null;
+    });
+    if (cached) inbox.restore(cached);
+  }
+
+  async function followConnection(connection: Connection | null) {
+    github.clearSessionCache();
+    if (!connection) {
+      inbox.reset();
+      await inboxCache.clear();
+      return;
+    }
+    await restoreCachedInbox();
     void inbox.restart();
+  }
+
+  async function setRepos(repos: string[]): Promise<Settings> {
+    const previous = settings.current().repos;
+    const updated = await settings.update({ repos });
+    if (sameRepoSet(previous, updated.repos)) inbox.rebuild();
+    else void inbox.restart();
     return updated;
   }
 
@@ -117,6 +197,34 @@ export function createKorev(deps: KorevDeps): Korev {
     const updated = await settings.update({ theme });
     deps.applyTheme(updated.theme);
     return updated;
+  }
+
+  function setCollapsedRepos(view: InboxView, repos: string[]) {
+    const { collapsedRepos } = settings.current();
+    return settings.update({
+      collapsedRepos: { ...collapsedRepos, [view]: repos },
+    });
+  }
+
+  async function setMergeWith(repo: unknown, tool: unknown) {
+    const mergeTool = parseMergeTool(tool);
+    const current = settings.current();
+    if (typeof repo !== 'string' || !mergeTool) return current;
+    const updated = await settings.update({
+      mergeWith: { ...current.mergeWith, [repo]: mergeTool },
+    });
+    inbox.rebuild();
+    return updated;
+  }
+
+  function withParsed<T>(
+    parse: (value: unknown) => T | null,
+    run: (parsed: T) => Promise<ActionResult>,
+  ): (value: unknown) => Promise<ActionResult> {
+    return (value) => {
+      const parsed = parse(value);
+      return parsed ? run(parsed) : Promise.resolve(INVALID_ACTION);
+    };
   }
 
   async function followRepoRenames(renames: RepoRename[]): Promise<void> {
@@ -166,23 +274,30 @@ export function createKorev(deps: KorevDeps): Korev {
   }
 
   const handlers: IpcHandlers = {
-    [IpcChannel.InboxLoad]: () => inbox.snapshot(),
+    [IpcChannel.InboxLoad]: () => withActions(inbox.snapshot()),
     [IpcChannel.InboxRefresh]: () => inbox.trigger('manual'),
     [IpcChannel.AuthGetState]: () => auth.state(),
     [IpcChannel.AuthStartDeviceFlow]: () => auth.startDeviceFlow(),
     [IpcChannel.AuthCancelDeviceFlow]: () => auth.cancelDeviceFlow(),
     [IpcChannel.AuthUseToken]: useToken,
     [IpcChannel.AuthDisconnect]: () => auth.disconnect(),
+    [IpcChannel.AuthRetryUnlock]: () => auth.retryUnlock(),
     [IpcChannel.SettingsLoad]: () => settings.current(),
     [IpcChannel.SettingsSetRepos]: setRepos,
     [IpcChannel.SettingsSetTheme]: setTheme,
     [IpcChannel.SettingsSetLastView]: (lastView: InboxView) =>
       settings.update({ lastView }),
+    [IpcChannel.SettingsSetCollapsedRepos]: setCollapsedRepos,
     [IpcChannel.SettingsSuggestedRepos]: suggestedRepos,
     [IpcChannel.ReposOwners]: repoOwners,
     [IpcChannel.ReposPage]: repoPage,
     [IpcChannel.ReposSearch]: searchRepos,
     [IpcChannel.ShellOpenGithub]: openGithub,
+    [IpcChannel.SettingsSetMergeWith]: setMergeWith,
+    [IpcChannel.PrMerge]: withParsed(parseMergeRequest, prActions.merge),
+    [IpcChannel.PrClose]: withParsed(parseTarget, prActions.close),
+    [IpcChannel.PrReopen]: withParsed(parseTarget, prActions.reopen),
+    [IpcChannel.PrCancelQueue]: withParsed(parseTarget, prActions.cancelQueue),
   };
 
   async function start(): Promise<void> {
@@ -190,8 +305,19 @@ export function createKorev(deps: KorevDeps): Korev {
     if (problem) deps.warn(problem);
     deps.applyTheme(loaded.theme);
     await auth.init();
+    await restoreCachedInbox();
     void inbox.start();
   }
 
-  return { handlers, settings, inbox, start };
+  const lifecycle: Korev['inbox'] = {
+    trigger: (reason) => inbox.trigger(reason),
+    suspend: () => inbox.suspend(),
+    resume: () => inbox.resume(),
+    stop: () => {
+      inbox.stop();
+      prActions.stop();
+    },
+  };
+
+  return { handlers, settings, inbox: lifecycle, start };
 }

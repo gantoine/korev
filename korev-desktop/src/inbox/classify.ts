@@ -1,10 +1,12 @@
 import type { MyPr, Reason, ReasonCode, ReasonSeverity } from '../shared/inbox';
+import type { MergeTool, QueueStatus } from '../shared/merge';
 import type { MergeStateStatus, PullRequest } from '../shared/pull-request';
 import { countOf } from './format';
 import { severityRank } from './severity';
 
 export interface ClassifyContext {
   unknownMergeStreak: number;
+  queue?: QueueStatus | null;
 }
 
 type ReasonRule = (pr: PullRequest, context: ClassifyContext) => Reason | null;
@@ -17,7 +19,16 @@ const READY_MERGE_STATES: ReadonlySet<MergeStateStatus> = new Set([
   'HAS_HOOKS',
 ]);
 
+const QUEUE_NAMES: Record<MergeTool, string> = {
+  github: 'merge',
+  trunk: 'Trunk',
+  mergify: 'Mergify',
+  aviator: 'Aviator',
+};
+
 const REASON_SEVERITY: Record<ReasonCode, ReasonSeverity> = {
+  'removed-from-queue': 'warning',
+  'in-queue': 'neutral',
   'checks-failing': 'danger',
   'changes-requested': 'danger',
   conflicts: 'danger',
@@ -118,6 +129,25 @@ function ciRunningReason(pr: PullRequest): Reason | null {
   return null;
 }
 
+function inQueueReason(
+  _pr: PullRequest,
+  { queue }: ClassifyContext,
+): Reason | null {
+  if (queue?.kind !== 'queued') return null;
+  return reason('in-queue', `In ${QUEUE_NAMES[queue.tool]} queue`);
+}
+
+function removedFromQueueReason(
+  _pr: PullRequest,
+  { queue }: ClassifyContext,
+): Reason | null {
+  if (queue?.kind !== 'removed') return null;
+  return reason(
+    'removed-from-queue',
+    `Removed from ${QUEUE_NAMES[queue.tool]} queue`,
+  );
+}
+
 function draftReason(pr: PullRequest): Reason | null {
   if (!pr.isDraft) return null;
   return reason('draft', 'Draft');
@@ -149,9 +179,11 @@ const NEEDS_YOU_RULES: readonly ReasonRule[] = [
   unresolvedThreadsReason,
   behindReason,
   optionalChecksReason,
+  removedFromQueueReason,
 ];
 
 const IN_PROGRESS_RULES: readonly ReasonRule[] = [
+  inQueueReason,
   ciRunningReason,
   draftReason,
   blockedReason,
@@ -186,8 +218,9 @@ export function classifyMyPr(
   context: ClassifyContext = FIRST_SIGHTING,
 ): MyPr {
   const needsYou = collectReasons(pr, context, NEEDS_YOU_RULES);
+  const queue = context.queue ?? null;
   if (needsYou.length > 0) {
-    return { pr, bucket: 'needs-you', reasons: needsYou };
+    return { pr, bucket: 'needs-you', reasons: needsYou, queue };
   }
   const inProgress = collectReasons(pr, context, IN_PROGRESS_RULES);
   if (inProgress.length === 0 && isReadyToMerge(pr)) {
@@ -195,7 +228,8 @@ export function classifyMyPr(
       pr,
       bucket: 'ready',
       reasons: [reason('ready-to-merge', 'Ready to merge')],
+      queue,
     };
   }
-  return { pr, bucket: 'in-progress', reasons: inProgress };
+  return { pr, bucket: 'in-progress', reasons: inProgress, queue };
 }

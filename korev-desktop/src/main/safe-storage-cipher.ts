@@ -1,5 +1,5 @@
 import type { SafeStorage } from 'electron';
-import type { SecretCipher } from './token-store';
+import type { SecretCipher } from './encrypted-file';
 
 const LINUX_PLATFORM = 'linux';
 const NON_LINUX_BACKEND = 'os-keychain';

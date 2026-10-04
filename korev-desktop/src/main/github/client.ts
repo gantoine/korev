@@ -1,4 +1,5 @@
 import type { Problem } from '../../shared/inbox';
+import type { RepoMergeInfo } from '../../shared/merge';
 import type { PullRequest } from '../../shared/pull-request';
 import type { RepoOwner, RepoPage } from '../../shared/repos';
 import { splitRepoName } from '../repo-names';
@@ -53,6 +54,7 @@ export interface Viewer {
 export interface ViewerTeam {
   org: string;
   slug: string;
+  members: string[];
 }
 
 export interface InboxResult {
@@ -63,6 +65,8 @@ export interface InboxResult {
   truncated: { mine: boolean; reviews: boolean };
   problems: Problem[];
   renamedRepos: RepoRename[];
+  repoMerge: Record<string, RepoMergeInfo>;
+  repoAvatars: Record<string, string>;
   stacksUnavailable: boolean;
 }
 
@@ -114,6 +118,8 @@ interface CollectedSearches {
   progress: Record<SearchKey, SearchProgress>;
   problems: Problem[];
   renamedRepos: RepoRename[];
+  repoMerge: Record<string, RepoMergeInfo>;
+  repoAvatars: Record<string, string>;
 }
 
 interface InboxPageRequest {
@@ -125,7 +131,10 @@ interface ViewerTeamsData {
   viewer: {
     organizations?: Connection<{
       login: string;
-      teams?: Connection<{ slug: string }>;
+      teams?: Connection<{
+        slug: string;
+        members?: Connection<{ login: string }>;
+      }>;
     }>;
   };
 }
@@ -219,6 +228,8 @@ class GithubApiClient implements GithubClient {
       },
       problems: uniqueProblems(searches.problems),
       renamedRepos: searches.renamedRepos,
+      repoMerge: searches.repoMerge,
+      repoAvatars: searches.repoAvatars,
       stacksUnavailable: this.#stacksUnavailable,
     };
   }
@@ -262,6 +273,8 @@ class GithubApiClient implements GithubClient {
       truncated: { mine: false, reviews: false },
       problems: [],
       renamedRepos: [],
+      repoMerge: {},
+      repoAvatars: {},
       stacksUnavailable: this.#stacksUnavailable,
     };
   }
@@ -280,6 +293,8 @@ class GithubApiClient implements GithubClient {
       progress: { mine: startProgress(), reviews: startProgress() },
       problems: [],
       renamedRepos: [],
+      repoMerge: {},
+      repoAvatars: {},
     };
     let accessTargets = repoAccessTargets(repos);
     while (SEARCH_KEYS.some((key) => !collected.progress[key].done)) {
@@ -490,6 +505,8 @@ function recordRepoAccess(
     ...toProblems(otherErrors, result.data, ssoHeader, token),
   );
   collected.renamedRepos.push(...access.renames);
+  Object.assign(collected.repoMerge, access.merge);
+  Object.assign(collected.repoAvatars, access.avatars);
 }
 
 function toProblems(
@@ -544,6 +561,7 @@ function toViewerTeams(data: ViewerTeamsData): ViewerTeam[] {
     presentNodes(organization.teams).map((team) => ({
       org: organization.login,
       slug: team.slug,
+      members: presentNodes(team.members).map((member) => member.login),
     })),
   );
 }

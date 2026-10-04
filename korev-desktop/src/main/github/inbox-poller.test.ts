@@ -5,7 +5,11 @@ import type { InboxSnapshot } from '../../shared/inbox';
 import type { PullRequest } from '../../shared/pull-request';
 import type { InboxResult } from './client';
 import { AuthLostError, NetworkError, RateLimitedError } from './errors';
-import { type InboxPollerClient, createInboxPoller } from './inbox-poller';
+import {
+  type InboxPollerClient,
+  createInboxPoller,
+  emptySnapshot,
+} from './inbox-poller';
 
 const START = new Date('2026-10-03T12:00:00Z');
 const SECOND = 1000;
@@ -32,22 +36,33 @@ function inboxResult(
     truncated: { mine: false, reviews: false },
     problems: [],
     renamedRepos: [],
+    repoMerge: {},
+    repoAvatars: {},
     stacksUnavailable: false,
   };
 }
 
 function fakeBuildInbox(input: InboxInput): Inbox {
+  const repos = [
+    ...new Set([...input.repoOrder, ...input.mine.map((pr) => pr.repo)]),
+  ].filter((repo) => input.mine.some((pr) => pr.repo === repo));
   return {
-    mine: [
-      {
-        bucket: 'needs-you',
-        count: input.mine.length,
-        entries: input.mine.map((pr) => ({
-          kind: 'pr',
-          item: { pr, bucket: 'needs-you', reasons: [] },
-        })),
-      },
-    ],
+    mine: repos.map((repo) => {
+      const prs = input.mine.filter((pr) => pr.repo === repo);
+      return {
+        repo,
+        sections: [
+          {
+            bucket: 'needs-you',
+            count: prs.length,
+            entries: prs.map((pr) => ({
+              kind: 'pr',
+              item: { pr, bucket: 'needs-you', reasons: [], queue: null },
+            })),
+          },
+        ],
+      };
+    }),
     reviews: [],
     reviewCount: 0,
   };
@@ -55,6 +70,7 @@ function fakeBuildInbox(input: InboxInput): Inbox {
 
 function prIds(snapshot: InboxSnapshot | undefined): string[] {
   return (snapshot?.mine ?? [])
+    .flatMap((group) => group.sections)
     .flatMap((section) => section.entries)
     .flatMap((entry) => (entry.kind === 'pr' ? [entry.item.pr.id] : []));
 }
@@ -87,6 +103,7 @@ function setup() {
     },
     token: () => session.token,
     repos: () => session.repos,
+    mergeWith: () => ({}),
     renameRepos: async (renames) => {
       session.repos = session.repos.map(
         (repo) => renames.find((rename) => rename.from === repo)?.to ?? repo,
@@ -146,6 +163,53 @@ describe('inbox poller', () => {
       repoCount: 1,
     });
     expect(prIds(last())).toEqual(['PR_1']);
+  });
+
+  it('shows a restored snapshot while the first sync runs, then replaces it', async () => {
+    const { poller, client, last } = setup();
+    const pending = deferred<InboxResult>();
+    client.fetchInbox.mockReturnValueOnce(pending.promise);
+    const cached = fakeBuildInbox({
+      mine: [makePr({ id: 'PR_CACHED' })],
+      repoOrder: [],
+    } as unknown as InboxInput);
+
+    poller.restore({
+      ...emptySnapshot(1),
+      ...cached,
+      status: 'live',
+      syncedAt: '2026-10-02T18:40:00.000Z',
+      viewerLogin: 'maria',
+    });
+    const starting = poller.start();
+    expect(last()).toMatchObject({ status: 'syncing', fromCache: true });
+    expect(prIds(last())).toEqual(['PR_CACHED']);
+    pending.resolve(inboxResult([makePr({ id: 'PR_1' })]));
+    await starting;
+
+    expect(last()).toMatchObject({ status: 'live', fromCache: false });
+    expect(prIds(last())).toEqual(['PR_1']);
+  });
+
+  it('rebuilds the repo groups in the new repo order without fetching', async () => {
+    const { poller, client, session, last, syncCount } = setup();
+    session.repos = ['acme/api', 'acme/web'];
+    client.fetchInbox.mockResolvedValueOnce(
+      inboxResult([
+        makePr({ id: 'PR_API', repo: 'acme/api' }),
+        makePr({ id: 'PR_WEB', repo: 'acme/web' }),
+      ]),
+    );
+    await poller.start();
+
+    session.repos = ['acme/web', 'acme/api'];
+    poller.rebuild();
+
+    expect(last()?.mine.map((group) => group.repo)).toEqual([
+      'acme/web',
+      'acme/api',
+    ]);
+    expect(syncCount()).toBe(1);
   });
 
   it('runs a full refresh every three minutes while live', async () => {

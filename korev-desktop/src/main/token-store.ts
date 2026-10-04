@@ -1,17 +1,10 @@
 import type { ConnectionMethod } from '../shared/auth';
+import {
+  createEncryptedFile,
+  hasSecureStorage,
+  type SecretCipher,
+} from './encrypted-file';
 import type { FileSystem } from './file-system';
-
-export interface DecryptResult {
-  result: string;
-  shouldReEncrypt: boolean;
-}
-
-export interface SecretCipher {
-  isAvailable(): Promise<boolean>;
-  storageBackend(): string;
-  encrypt(plainText: string): Promise<Buffer>;
-  decrypt(encrypted: Buffer): Promise<DecryptResult>;
-}
 
 export interface StoredToken {
   token: string;
@@ -20,14 +13,19 @@ export interface StoredToken {
   avatarUrl: string | null;
 }
 
+export type TokenLoadResult =
+  | { status: 'missing' }
+  | { status: 'unreadable' }
+  | { status: 'loaded'; token: StoredToken };
+
 export interface TokenStore {
-  load(): Promise<StoredToken | null>;
+  load(): Promise<TokenLoadResult>;
   save(token: StoredToken): Promise<void>;
   clear(): Promise<void>;
 }
 
-const INSECURE_BACKEND = 'basic_text';
 const METHODS: readonly ConnectionMethod[] = ['oauth', 'token'];
+const MISSING: TokenLoadResult = { status: 'missing' };
 
 export class TokenStorageUnavailableError extends Error {
   constructor() {
@@ -60,41 +58,27 @@ export function createTokenStore(deps: {
   fs: FileSystem;
   path: string;
 }): TokenStore {
-  const { cipher, fs, path } = deps;
+  const file = createEncryptedFile(deps);
 
-  async function assertSecureStorage(): Promise<void> {
-    if (cipher.storageBackend() === INSECURE_BACKEND) {
-      throw new TokenStorageUnavailableError();
-    }
-    if (!(await cipher.isAvailable())) throw new TokenStorageUnavailableError();
+  function write(token: StoredToken): Promise<void> {
+    return file.write(JSON.stringify(token));
   }
 
-  async function write(token: StoredToken): Promise<void> {
-    await fs.writeAtomic(path, await cipher.encrypt(JSON.stringify(token)));
-  }
-
-  async function decrypt(encrypted: Buffer): Promise<DecryptResult | null> {
-    try {
-      return await cipher.decrypt(encrypted);
-    } catch {
-      return null;
-    }
-  }
-
-  async function load(): Promise<StoredToken | null> {
-    const encrypted = await fs.read(path);
-    if (!encrypted) return null;
-    const decrypted = await decrypt(encrypted);
-    if (!decrypted) return null;
-    const stored = parseStoredToken(decrypted.result);
-    if (stored && decrypted.shouldReEncrypt) await write(stored);
-    return stored;
+  async function load(): Promise<TokenLoadResult> {
+    const read = await file.read();
+    if (read.status !== 'read') return read;
+    const token = parseStoredToken(read.text);
+    if (!token) return MISSING;
+    if (read.shouldReEncrypt) await write(token);
+    return { status: 'loaded', token };
   }
 
   async function save(token: StoredToken): Promise<void> {
-    await assertSecureStorage();
+    if (!(await hasSecureStorage(deps.cipher))) {
+      throw new TokenStorageUnavailableError();
+    }
     await write(token);
   }
 
-  return { load, save, clear: () => fs.remove(path) };
+  return { load, save, clear: () => file.remove() };
 }

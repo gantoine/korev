@@ -44,8 +44,16 @@ export interface StackNode {
 }
 
 export interface LatestReviewNode {
-  author?: { login?: string } | null;
+  author?: { __typename?: string; login?: string } | null;
   state?: string;
+}
+
+export interface CommentNode {
+  author?: { __typename?: string; login?: string } | null;
+  body?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  url?: string;
 }
 
 export interface ReviewThreadNode {
@@ -77,6 +85,8 @@ export interface PullRequestNode {
   stack?: StackNode | null;
   stackEntry?: { position?: number } | null;
   reviewThreads?: Connection<ReviewThreadNode>;
+  isInMergeQueue?: boolean;
+  comments?: Connection<CommentNode>;
   files?: Connection<{ path: string; additions: number; deletions: number }>;
   reviewRequests?: Connection<{ requestedReviewer?: ReviewerNode | null }>;
   timelineItems?: Connection<{

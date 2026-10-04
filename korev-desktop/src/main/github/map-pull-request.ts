@@ -5,6 +5,7 @@ import type {
   CiState,
   MergeStateStatus,
   Mergeable,
+  PrComment,
   PrState,
   PullRequest,
   ReviewDecision,
@@ -17,6 +18,7 @@ import type {
 } from '../../shared/pull-request';
 import {
   type CheckContextNode,
+  type CommentNode,
   type LatestReviewNode,
   type PullRequestNode,
   type ReviewerNode,
@@ -87,6 +89,7 @@ const CHECK_RUN_TYPE = 'CheckRun';
 const STATUS_CONTEXT_TYPE = 'StatusContext';
 const USER_TYPE = 'User';
 const TEAM_TYPE = 'Team';
+const BOT_TYPE = 'Bot';
 const COMPLETED_STATUS = 'COMPLETED';
 const STACK_WARNING =
   'GitHub returned no usable stack data; showing stacked PRs as single PRs.';
@@ -129,7 +132,23 @@ export function toPullRequest(
     reviews: toSubmittedReviews(node),
     reviewRequestEvents: toReviewRequestEvents(node),
     stack: toStack(node, warn),
+    isInMergeQueue: node.isInMergeQueue ?? false,
+    comments: presentNodes(node.comments).flatMap(toComment),
   };
+}
+
+function toComment(node: CommentNode): PrComment[] {
+  if (!node.body || !node.createdAt || !node.url) return [];
+  return [
+    {
+      authorLogin: node.author?.login ?? null,
+      isBot: node.author?.__typename === BOT_TYPE,
+      body: node.body,
+      createdAt: node.createdAt,
+      updatedAt: node.updatedAt ?? node.createdAt,
+      url: node.url,
+    },
+  ];
 }
 
 function oneOf<TValue extends string, TFallback>(
@@ -194,7 +213,7 @@ function toSubmittedReview(node: LatestReviewNode): SubmittedReview[] {
   const login = node.author?.login;
   const state = oneOf(node.state, REVIEW_STATES, null);
   if (!login || !state) return [];
-  return [{ login, state }];
+  return [{ login, state, isBot: node.author?.__typename === BOT_TYPE }];
 }
 
 function toSubmittedReviews(node: PullRequestNode): SubmittedReview[] {

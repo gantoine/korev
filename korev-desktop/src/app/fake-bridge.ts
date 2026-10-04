@@ -71,6 +71,7 @@ export function installFakeBridge({
       cancelDeviceFlow: vi.fn(async () => undefined),
       useToken: vi.fn(async () => ({ ok: false as const, message: 'nope' })),
       disconnect: vi.fn(async () => undefined),
+      retryUnlock: vi.fn(async () => undefined),
       onChanged: vi.fn(() => () => undefined),
     },
     settings: {
@@ -78,6 +79,14 @@ export function installFakeBridge({
       setRepos: vi.fn(async (repos: string[]) => ({ ...settings, repos })),
       setTheme: vi.fn(async (theme) => ({ ...settings, theme })),
       setLastView: vi.fn(async (lastView) => ({ ...settings, lastView })),
+      setMergeWith: vi.fn(async (repo, tool) => ({
+        ...settings,
+        mergeWith: { ...settings.mergeWith, [repo]: tool },
+      })),
+      setCollapsedRepos: vi.fn(async (view, repos) => ({
+        ...settings,
+        collapsedRepos: { ...settings.collapsedRepos, [view]: repos },
+      })),
       suggestedRepos: vi.fn(async () => suggestedRepos),
       onChanged: vi.fn((listener) => {
         settingsListeners.add(listener);
@@ -90,6 +99,12 @@ export function installFakeBridge({
         findPage(pages, owner, cursor),
       ),
       search: vi.fn(async () => []),
+    },
+    pr: {
+      merge: vi.fn(async () => ({ ok: true as const })),
+      close: vi.fn(async () => ({ ok: true as const })),
+      reopen: vi.fn(async () => ({ ok: true as const })),
+      cancelQueue: vi.fn(async () => ({ ok: true as const })),
     },
     shell: { openGithub: vi.fn(async () => undefined) },
     app: {

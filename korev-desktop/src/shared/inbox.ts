@@ -1,3 +1,4 @@
+import type { PrActionState, QueueStatus, RepoMergeInfo } from './merge';
 import type { PullRequest, StackLayer } from './pull-request';
 
 export type Bucket = 'needs-you' | 'in-progress' | 'ready';
@@ -18,7 +19,9 @@ export type ReasonCode =
   | 'checking-mergeability'
   | 'mergeability-unknown'
   | 'no-checks'
-  | 'ready-to-merge';
+  | 'ready-to-merge'
+  | 'in-queue'
+  | 'removed-from-queue';
 
 export interface Reason {
   code: ReasonCode;
@@ -30,6 +33,7 @@ export interface MyPr {
   pr: PullRequest;
   bucket: Bucket;
   reasons: Reason[];
+  queue: QueueStatus | null;
 }
 
 export type MyStackLayer =
@@ -56,6 +60,11 @@ export interface MySection {
   bucket: Bucket;
   count: number;
   entries: MyEntry[];
+}
+
+export interface MyRepoGroup {
+  repo: string;
+  sections: MySection[];
 }
 
 export type PrSize = 'S' | 'M' | 'L';
@@ -108,6 +117,23 @@ export type ReviewEntry =
   | { kind: 'pr'; item: ReviewItem }
   | { kind: 'stack'; stack: ReviewStack };
 
+export type Approval =
+  | { kind: 'you' }
+  | { kind: 'teammate'; login: string }
+  | { kind: 'bot'; login: string }
+  | { kind: 'overall' };
+
+export interface ApprovedReview {
+  item: ReviewItem;
+  approval: Approval;
+}
+
+export interface ReviewRepoGroup {
+  repo: string;
+  entries: ReviewEntry[];
+  approved: ApprovedReview[];
+}
+
 export type SyncStatus =
   | 'idle'
   | 'syncing'
@@ -135,12 +161,16 @@ export interface Problem {
 export interface InboxSnapshot {
   status: SyncStatus;
   syncedAt: string | null;
+  fromCache: boolean;
   viewerLogin: string | null;
   repoCount: number;
-  mine: MySection[];
-  reviews: ReviewEntry[];
+  mine: MyRepoGroup[];
+  reviews: ReviewRepoGroup[];
   reviewCount: number;
   problems: Problem[];
+  repoMerge: Record<string, RepoMergeInfo>;
+  repoAvatars: Record<string, string>;
+  actions: Record<string, PrActionState>;
   truncated: { mine: boolean; reviews: boolean };
   stacksUnavailable: boolean;
   error: string | null;
