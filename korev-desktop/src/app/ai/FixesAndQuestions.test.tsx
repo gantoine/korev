@@ -67,6 +67,7 @@ function renderMine(
   const fake = installFakeBridge({ settings: WITH_AGENT });
   render(
     <MyPrs
+      view="open"
       snapshot={makeSnapshot({
         mine: [
           {
@@ -190,6 +191,7 @@ describe('Korev activity', () => {
     installFakeBridge({ settings: WITH_AGENT });
     render(
       <MyPrs
+        view="open"
         snapshot={makeSnapshot({
           mine: [
             {
