@@ -799,6 +799,7 @@ export type AppCommand =
   | 'toggle-zen'
   | 'quick-open'
   | 'search-files'
+  | 'confirm-quit'
   | 'select-workspace-1'
   | 'select-workspace-2'
   | 'select-workspace-3'
