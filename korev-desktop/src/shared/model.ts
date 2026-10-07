@@ -185,6 +185,12 @@ export interface ChatSession {
   agentSessionId: string | null;
   forkOnNextTurn: boolean;
   createdAt: string;
+  pendingPlan?: PendingPlan;
+}
+
+export interface PendingPlan {
+  plan: string;
+  from: string;
 }
 
 export interface Workspace {
@@ -585,6 +591,9 @@ export interface PermissionResponse {
 }
 
 export const PLAN_TOOL = 'ExitPlanMode';
+
+export const PENDING_PLAN_PLACEHOLDER =
+  'Add instructions, or send to implement the plan';
 
 export function planOf(items: ChatItem[]): string | null {
   const planTool = items.findLast(

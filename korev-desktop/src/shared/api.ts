@@ -96,6 +96,7 @@ export interface KorevApi {
       fast?: boolean;
       planMode?: boolean;
       title?: string;
+      pendingPlan?: null;
     },
   ): Promise<void>;
   transcript(sessionId: string): Promise<ChatItem[]>;
@@ -150,6 +151,7 @@ export interface KorevApi {
   ): Promise<ReviewComment[]>;
   listFiles(workspaceId: string): Promise<string[]>;
   readFile(workspaceId: string, path: string): Promise<string | null>;
+  readImage(sessionId: string, path: string): Promise<string | null>;
   prStatuses(workspaceId: string): Promise<PrStatus[]>;
   mergePr(workspaceId: string, prNumber: number): Promise<Result>;
   openIn(workspaceId: string, editor: EditorId): Promise<Result>;
