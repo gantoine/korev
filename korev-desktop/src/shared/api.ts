@@ -79,6 +79,7 @@ export interface KorevApi {
       model?: string;
       effort?: string;
       fast?: boolean;
+      planMode?: boolean;
       title?: string;
     },
   ): Promise<void>;
