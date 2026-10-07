@@ -14,6 +14,7 @@ import {
   type PrStatus,
   type Repo,
   type RepoFolder,
+  type RemoteStatus,
   type RepoScripts,
   type TerminalPreset,
   type Result,
@@ -176,6 +177,7 @@ export interface KorevDeps extends CoreDeps {
   openPath(target: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   applyTheme(theme: Settings['theme']): void;
+  remoteStatus(): RemoteStatus;
 }
 
 export interface Korev {
@@ -183,6 +185,7 @@ export interface Korev {
   runningAgents(): number;
   settings(): Settings;
   updateSettings(patch: Partial<Settings>): Promise<void>;
+  emitState(): void;
   shutdown(): Promise<void>;
 }
 
@@ -381,6 +384,7 @@ export async function createKorev(deps: KorevDeps): Promise<Korev> {
       spotlights: spotlight.active(),
       agents,
       editors,
+      remote: deps.remoteStatus(),
     };
   }
 
@@ -1114,6 +1118,7 @@ export async function createKorev(deps: KorevDeps): Promise<Korev> {
     runningAgents: () => ctx.runningSessions.size,
     settings: () => store.state.settings,
     updateSettings,
+    emitState: () => ctx.emitState(),
     async shutdown() {
       clearInterval(prWatch);
       await spotlight.disableAll();
