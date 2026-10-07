@@ -14,7 +14,6 @@ import {
   type PrStatus,
   type Repo,
   type RepoFolder,
-  type RemoteStatus,
   type RepoScripts,
   type TerminalPreset,
   type Result,
@@ -25,6 +24,7 @@ import {
   type WorkspaceStatus,
 } from '../shared/model';
 import { detectAgents } from './agents';
+import type { RemoteAccess } from './remote-access';
 import { askWorktreePath } from './ask-worktrees';
 import { createChats, latestPlan, type TurnPrLinks } from './chats';
 import { readConductorRepos, readConductorSettings } from './conductor-import';
@@ -161,6 +161,8 @@ const APPLICATION_DIRS = [
   '/System/Applications/Utilities',
 ];
 
+const REMOTE_SETTINGS: (keyof Settings)[] = ['remoteAccess', 'remotePort'];
+
 function installedEditors(home: string): EditorApp[] {
   const dirs = [...APPLICATION_DIRS, path.join(home, 'Applications')];
   return EDITORS.filter(
@@ -177,7 +179,7 @@ export interface KorevDeps extends CoreDeps {
   openPath(target: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   applyTheme(theme: Settings['theme']): void;
-  remoteStatus(): RemoteStatus;
+  remote: Pick<RemoteAccess, 'status' | 'pairing' | 'apply' | 'revoke'>;
 }
 
 export interface Korev {
@@ -384,7 +386,7 @@ export async function createKorev(deps: KorevDeps): Promise<Korev> {
       spotlights: spotlight.active(),
       agents,
       editors,
-      remote: deps.remoteStatus(),
+      remote: deps.remote.status(),
     };
   }
 
@@ -632,6 +634,8 @@ export async function createKorev(deps: KorevDeps): Promise<Korev> {
     Object.assign(store.state.settings, patch);
     if (patch.theme) deps.applyTheme(patch.theme);
     store.save();
+    if (REMOTE_SETTINGS.some((key) => key in patch))
+      await deps.remote.apply(store.state.settings);
     ctx.emitState();
   }
 
@@ -1082,6 +1086,8 @@ export async function createKorev(deps: KorevDeps): Promise<Korev> {
     },
     openExternal: (url) => deps.openExternal(url),
     updateSettings,
+    remotePairing: () => deps.remote.pairing(),
+    revokeRemoteDevices: () => deps.remote.revoke(),
     async openTerminal(ref, workspaceId, kind, size, preset = 'shell') {
       assertOwnRef(ref, workspaceId);
       if (kind === 'shell' && !ctx.terminals.isRunning(ref)) {

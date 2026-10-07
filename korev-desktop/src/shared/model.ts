@@ -355,6 +355,13 @@ export interface AppState {
 export interface RemoteStatus {
   address: string | null;
   devices: string[];
+  onTailnet: boolean;
+  error: string | null;
+}
+
+export interface RemotePairing {
+  url: string;
+  token: string;
 }
 
 export interface Checkpoint {
