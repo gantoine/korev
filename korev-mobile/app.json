@@ -19,6 +19,7 @@
     },
     "android": {
       "package": "ai.korev.mobile",
+      "googleServicesFile": "./google-services.json",
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.CAMERA",
@@ -65,7 +66,8 @@
           }
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,
