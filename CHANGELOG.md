@@ -4,6 +4,8 @@ Korev shows the section of each version in its "What's new" window, so write for
 
 ## [Unreleased]
 
+- You can choose repositories for a new workspace with the keyboard. When you press ⌘N and no repository is chosen, the repository list opens with the search box ready. Type to filter, use ↑ and ↓ to move, and press Space to check or uncheck a repository. Enter closes the list and moves you to the message box. If no repository is checked yet, Enter chooses the highlighted one.
+
 ## [0.8.0] - 2026-10-09
 
 The grid view shows chats and terminals from several workspaces side by side.
