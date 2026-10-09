@@ -16,18 +16,26 @@ To pick a layout, click the layout button at the top right. The layouts are 2×1
 - Drag a workspace from the sidebar onto a pane.
 - Or click **Choose workspace** in an empty pane.
 
-The pane shows the chat or terminal tab you used last in that workspace. To show a different chat or terminal of the same workspace, click its name in the pane header. In that menu, **New chat**, **New terminal**, **Claude Code in a terminal** and **Codex in a terminal** open a new tab in the pane.
+The pane shows the chat or terminal tab you used last in that workspace. If another pane already shows that tab, the pane shows the next chat or terminal of the workspace. If other panes show all of them, the pane starts a new chat. To show a different chat or terminal of the same workspace, click its name in the pane header. In that menu, **New chat**, **New terminal**, **Claude Code in a terminal** and **Codex in a terminal** open a new tab in the pane.
 
 A pane terminal is the same terminal as the tab in the full view. It keeps running when you switch between the grid and the full view.
 
-A chat or a terminal shows in one pane at most. If you put it in a second pane, it leaves the first one.
+## Ask in a pane
+
+Drag an Ask chat from the sidebar onto a pane. Or click **Ask** in an empty pane, then click **New ask** to ask a new question, or click a recent Ask chat to show it. A new ask shows the repository picker and the composer in the pane. When you send the question, the pane shows the answer.
+
+**Open in full view** on an Ask pane opens the Ask page, where **Start workspace** continues the conversation in a new workspace.
+
+## One pane per chat
+
+A chat, a terminal or an Ask chat shows in one pane at most. If you pick it for a second pane, it leaves the first one.
 
 ## Work in a pane
 
-Click a pane to focus it. The focused pane has a blue border. The keyboard shortcuts work on the focused pane:
+Click a pane to focus it. The focused pane has a blue border, and the sidebar highlights its workspace or Ask chat. The keyboard shortcuts work on the focused pane:
 
 - ⌘L focuses its composer.
-- ⌘T starts a new chat in it.
+- ⌘T starts a new chat in it, if it shows a workspace.
 - ⌘W removes it from the grid. The chat or terminal stays open in its workspace.
 - ⌘⇧P, ⌘⇧X and ⌘⇧⌫ work on its workspace and chat.
 

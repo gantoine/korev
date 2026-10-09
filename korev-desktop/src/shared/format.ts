@@ -4,6 +4,7 @@ import {
   loadoutKey,
   type AgentKind,
   type AppState,
+  type AskChat,
   type ChatSession,
   type ModelChoice,
   type Repo,
@@ -94,4 +95,13 @@ export function pickerLabel(picked: Repo[]): string {
   const names = picked.map((repo) => repo.name);
   if (names.length <= MAX_NAMED_REPOS) return names.join(', ');
   return `${names[0]} +${names.length - 1}`;
+}
+
+const NO_REPOSITORY = 'No repository';
+
+export function askRepoNames(state: AppState, ask: AskChat): string {
+  if (!ask.repoIds.length) return NO_REPOSITORY;
+  return ask.repoIds
+    .map((repoId) => state.repos.find((repo) => repo.id === repoId)?.name)
+    .join(', ');
 }
